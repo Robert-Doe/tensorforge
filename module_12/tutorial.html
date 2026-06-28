@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 12 — Random Forests & Boosting</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .forest-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin:1rem 0}
+  .tree-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.6rem;text-align:center;font-size:.8rem}
+  .tree-card .vote{font-size:1.4rem;font-weight:700}
+  .boost-flow{display:flex;align-items:center;gap:.4rem;overflow-x:auto;padding:.5rem 0;margin:1rem 0}
+  .boost-box{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.6rem .8rem;font-size:.8rem;text-align:center;flex-shrink:0}
+  .arrow{color:var(--muted);font-size:1.2rem;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 07 (Decision Trees) and Module 10 (sklearn basics).</p>
+  <p>No new installs needed — scikit-learn already includes RandomForest and GradientBoosting.</p>
+</div>
+</section>
+
+<h1>Module 12 — Random Forests &amp; Gradient Boosting</h1>
+<h2>One detective is good. A hundred detectives voting is better.</h2>
+
+<section>
+<h2>01 · The Big Analogy — Bagging</h2>
+<p>A single Detective (Decision Tree) is smart but overconfident. She memorises the training cases so well that she gets confused by any new case that looks slightly different.</p>
+<p>The Chief's solution: hire <strong>100 detectives</strong>. Give each one a different random subset of the case files AND a random subset of the evidence types to examine. Then let them all vote. The majority verdict is the final answer.</p>
+<p>No single detective sees the whole picture — but together they cover every angle. That's a <strong>Random Forest</strong>.</p>
+
+<div class="forest-grid">
+  <div class="tree-card"><div class="vote" style="color:var(--green)">✓</div>Tree 1<br>Solved</div>
+  <div class="tree-card"><div class="vote" style="color:var(--green)">✓</div>Tree 2<br>Solved</div>
+  <div class="tree-card"><div class="vote" style="color:var(--red)">✗</div>Tree 3<br>Unsolved</div>
+  <div class="tree-card"><div class="vote" style="color:var(--green)">✓</div>Tree 4<br>Solved</div>
+  <div class="tree-card"><div class="vote" style="color:var(--green)">✓</div>Tree 5<br>Solved</div>
+</div>
+<p style="color:var(--muted)">4 votes "Solved" → Final verdict: <strong style="color:var(--green)">Solved</strong></p>
+</section>
+
+<section>
+<h2>02 · Bagging vs. Boosting</h2>
+<table>
+  <tr><th></th><th>Random Forest (Bagging)</th><th>Gradient Boosting</th></tr>
+  <tr><td><strong>Tree order</strong></td><td>Parallel — all trees grown at once</td><td>Sequential — each tree fixes the last one's mistakes</td></tr>
+  <tr><td><strong>Each tree sees</strong></td><td>Random bootstrap sample + random features</td><td>Full data, weighted by previous errors</td></tr>
+  <tr><td><strong>Speed</strong></td><td>Fast (parallelisable)</td><td>Slower (sequential)</td></tr>
+  <tr><td><strong>Typical accuracy</strong></td><td>Very good</td><td>Usually better, but needs tuning</td></tr>
+  <tr><td><strong>Overfitting risk</strong></td><td>Low — averaging reduces variance</td><td>Moderate — can overfit with too many rounds</td></tr>
+</table>
+
+<h2>The Boosting Flow</h2>
+<div class="boost-flow">
+  <div class="boost-box">Data<br>(all cases)</div>
+  <div class="arrow">→</div>
+  <div class="boost-box" style="border-color:var(--accent)">Tree 1<br>(weak)</div>
+  <div class="arrow">→</div>
+  <div class="boost-box">Errors<br>of Tree 1</div>
+  <div class="arrow">→</div>
+  <div class="boost-box" style="border-color:var(--accent)">Tree 2<br>fixes errors</div>
+  <div class="arrow">→</div>
+  <div class="boost-box">Errors<br>of T1+T2</div>
+  <div class="arrow">→</div>
+  <div class="boost-box" style="border-color:var(--accent)">Tree 3…</div>
+  <div class="arrow">→</div>
+  <div class="boost-box" style="border-color:var(--green)">Final<br>prediction</div>
+</div>
+</section>
+
+<section>
+<h2>03 · Code</h2>
+<pre><code>from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+
+# Random Forest — 100 trees, parallel, no feature scaling needed
+rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+rf.fit(X_train, y_train)
+
+# Gradient Boosting — 100 sequential rounds, shallow trees
+gb = GradientBoostingClassifier(
+    n_estimators=100,
+    learning_rate=0.1,   # shrinks each tree's contribution — reduces overfitting
+    max_depth=3,         # keep weak learners weak
+    random_state=42,
+)
+gb.fit(X_train, y_train)
+
+# Feature importances — which evidence mattered most?
+print(rf.feature_importances_)   # array of shape (n_features,)</code></pre>
+
+<div class="callout warn">
+  <strong>No StandardScaler needed for tree-based models.</strong> Trees split on thresholds, not distances — they're completely scale-invariant. Unlike SVM and Logistic Regression, you can feed raw features directly.
+</div>
+</section>
+
+<section>
+<h2>04 · Feature Importances</h2>
+<p>After training, each tree ensemble can tell you which features it found most useful for making splits. This is one of the most practical outputs in all of ML — it tells you which pieces of evidence actually matter for predicting case outcomes.</p>
+<pre><code>importances = rf.feature_importances_         # shape: (n_features,)
+sorted_idx  = np.argsort(importances)[::-1]   # descending
+
+for i in sorted_idx:
+    print(f"{feature_names[i]:<20} {importances[i]:.4f}")</code></pre>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_12&gt; python main.py</span><br><br>
+MODULE 12 — Random Forests &amp; Gradient Boosting<br>
+====================================================<br>
+<br>
+Random Forest (100 trees)<br>
+&nbsp;&nbsp;CV Accuracy : 0.758<br>
+&nbsp;&nbsp;Test Acc    : 0.792<br>
+&nbsp;&nbsp;ROC-AUC     : 0.834<br>
+<br>
+Feature Importances (RandomForest):<br>
+&nbsp;&nbsp;evidence_score&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0.2841<br>
+&nbsp;&nbsp;motive_strength&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0.2203<br>
+&nbsp;&nbsp;days_open&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0.1987<br>
+&nbsp;&nbsp;witness_count&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0.1452<br>
+&nbsp;&nbsp;suspect_age&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0.0934<br>
+&nbsp;&nbsp;crime_severity&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0.0583<br>
+<br>
+Gradient Boosting (100 rounds, lr=0.1)<br>
+&nbsp;&nbsp;CV Accuracy : 0.775<br>
+&nbsp;&nbsp;Test Acc    : 0.792<br>
+&nbsp;&nbsp;ROC-AUC     : 0.851<br>
+<br>
+=== Head-to-Head ===<br>
+Model&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CV Acc&nbsp;&nbsp;&nbsp;AUC<br>
+Random Forest (100)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.758&nbsp;&nbsp;&nbsp;0.834<br>
+Gradient Boosting (100)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.775&nbsp;&nbsp;&nbsp;0.851<br>
+<br>
+Saved → plots/ensemble_sweep.png<br>
+Saved → plots/feat_importance_randomforest.png<br>
+Saved → plots/feat_importance_gradientboosting.png
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The n_estimators sweep plot shows accuracy improving as you add more trees, then plateauing. Why does it plateau instead of continuing to improve?</p>
+  <p>And why doesn't accuracy <em>decrease</em> when you add too many trees, unlike in KNN (where too-high k hurt accuracy)?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> Each additional tree adds a slightly different perspective, but once you've covered the diversity in the data, new trees are just repeating what the ensemble already knows. The signal saturates. Unlike KNN's k (which changes the decision boundary), adding more trees to a forest only makes predictions <em>more stable</em>, not worse — the extra averaging can't hurt, it just stops helping.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: What is XGBoost and how does it differ from sklearn's GradientBoosting?</div>
+  <div class="qa-a">XGBoost (Extreme Gradient Boosting) is an optimised implementation of gradient boosting with second-order gradient approximations, built-in regularisation, and hardware-level parallelism. It's 10-50x faster than sklearn's GB on large datasets and often slightly more accurate. The underlying algorithm is the same; the engineering is the difference. Install with: pip install xgboost.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Can I use feature importances to remove unimportant features?</div>
+  <div class="qa-a">Yes — this is called feature selection. If a feature has near-zero importance in both RF and GB, it's contributing almost nothing and can be dropped to speed up training. However, use caution: low importance in one ensemble doesn't mean useless in all models. Always retrain and re-evaluate after dropping features.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: When should I use Random Forest vs. Gradient Boosting?</div>
+  <div class="qa-a">Random Forest: when you want a strong baseline quickly, when training speed matters, or when you have noisy data (RF is more robust to noise). Gradient Boosting: when you need maximum accuracy and can afford slower training and careful hyperparameter tuning. In practice, try both and measure.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 13 — k-Means Clustering from Scratch</strong><br>
+  Every module so far has been <em>supervised</em> — we always had correct labels to learn from. Now we go <em>unsupervised</em>: the model gets raw data with no labels and must find its own structure. k-Means groups similar cases together by repeatedly asking "which centroid is each point closest to?"
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_11/tutorial.html">← Module 11: SVMs</a>
+  <a href="../module_13/tutorial.html">Module 13: k-Means →</a>
+</div>
+
+</body>
+</html>
