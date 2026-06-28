@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 14 — PCA</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .step-flow{display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem;margin:1rem 0}
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.7rem;text-align:center}
+  .step .num{font-size:1.4rem;font-weight:700;color:var(--accent)}
+  .step .label{font-size:.75rem;color:var(--muted);margin-top:.2rem}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 01 (NumPy), Module 13 (clustering). Matrix multiplication and the concept of a covariance matrix help but aren't strictly required.</p>
+  <p><strong>Key concept:</strong> PCA is a coordinate rotation, not a lossy compression. You rotate the axes so the first axis points in the direction of maximum variance.</p>
+</div>
+</section>
+
+<h1>Module 14 — Principal Component Analysis</h1>
+<h2>Turn 6-dimensional evidence into a 2D map you can actually see</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Ada has 6 evidence measurements per case. To visualise all 120 cases simultaneously she'd need a 6-dimensional chart — which doesn't fit on any screen.</p>
+<p>She notices that two measurements often move together: cases with high evidence scores tend to have high motive scores. That redundancy means those two dimensions aren't giving her independent information.</p>
+<p>PCA finds a new set of axes — <strong>principal components</strong> — where the first axis captures as much case-to-case variation as possible, the second captures as much of the remaining variation as possible, and so on. Then she throws away the last few axes (the ones capturing barely any variation) and plots the first two. <strong>No information is faked — only redundancy is removed.</strong></p>
+
+<div class="step-flow">
+  <div class="step"><div class="num">1</div><div class="label">Centre data (subtract mean)</div></div>
+  <div class="step"><div class="num">2</div><div class="label">Covariance matrix</div></div>
+  <div class="step"><div class="num">3</div><div class="label">Eigendecompose</div></div>
+  <div class="step"><div class="num">4</div><div class="label">Sort by eigenvalue</div></div>
+  <div class="step"><div class="num">5</div><div class="label">Project onto top-k PCs</div></div>
+</div>
+</section>
+
+<section>
+<h2>02 · What is an Eigenvector?</h2>
+<p>When you multiply a matrix M by most vectors, the result points in a different direction. An <strong>eigenvector</strong> is special: multiplying it by M only stretches or shrinks it, never rotates it. The stretch factor is the <strong>eigenvalue</strong>.</p>
+<p>For a covariance matrix, eigenvectors point in directions of maximum spread. The eigenvalue measures how much spread exists in that direction. The eigenvector with the largest eigenvalue = the direction in your data with the most variance = <strong>PC1</strong>.</p>
+<pre><code>eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+# eigenvalues:  (n_features,) — how much variance each direction captures
+# eigenvectors: (n_features, n_features) — the directions themselves (columns)</code></pre>
+</section>
+
+<section>
+<h2>03 · The Full Algorithm</h2>
+<pre><code># Step 1: centre
+mean      = X.mean(axis=0)       # (n_features,)
+X_centred = X - mean             # now each column has mean 0
+
+# Step 2: covariance matrix
+cov = (X_centred.T @ X_centred) / (n_samples - 1)   # (n_features, n_features)
+
+# Step 3: eigendecompose (eigh for symmetric matrices)
+eigenvalues, eigenvectors = np.linalg.eigh(cov)
+
+# Step 4: sort descending — largest variance first
+order        = np.argsort(eigenvalues)[::-1]
+eigenvectors = eigenvectors[:, order]   # each column is one PC
+
+# Step 5: project onto top-k components
+components = eigenvectors[:, :k].T     # (k, n_features) — each row is one PC
+X_projected = X_centred @ components.T # (n_samples, k)</code></pre>
+
+<div class="callout warn">
+  <strong>Centre before projecting.</strong> If you forget to subtract the mean, PC1 may just point toward the centroid of the data instead of the direction of maximum variance. Always subtract the training mean — and use the same mean when transforming test data.
+</div>
+</section>
+
+<section>
+<h2>04 · Explained Variance and the Scree Plot</h2>
+<p>Each eigenvalue tells you how much variance the corresponding PC captures. The fraction of total variance is:</p>
+<pre><code>explained_ratio = eigenvalues / eigenvalues.sum()
+# PC1 might capture 45%, PC2 another 22%, etc.</code></pre>
+<p>The <strong>scree plot</strong> shows these ratios. Look for the "elbow" — the point where adding another component gives diminishing returns. If PC1+PC2 already explain 80%+ of variance, 2D is a good projection.</p>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_14&gt; python main.py</span><br><br>
+MODULE 14 — PCA from Scratch<br>
+====================================================<br>
+Original data shape: (120, 6)<br>
+<br>
+Explained Variance per Component:<br>
+&nbsp;&nbsp;PC1: 38.2%  cumulative= 38.2%  ███████████████<br>
+&nbsp;&nbsp;PC2: 21.4%  cumulative= 59.6%  ████████<br>
+&nbsp;&nbsp;PC3: 16.1%  cumulative= 75.7%  ██████<br>
+&nbsp;&nbsp;PC4: 12.3%  cumulative= 88.0%  ████<br>
+&nbsp;&nbsp;PC5:  7.8%  cumulative= 95.8%  ███<br>
+&nbsp;&nbsp;PC6:  4.2%  cumulative=100.0%  █<br>
+<br>
+Component Loadings:<br>
+&nbsp;&nbsp;Feature                   PC1      PC2<br>
+&nbsp;&nbsp;--------------------------------------<br>
+&nbsp;&nbsp;suspect_age             0.412    0.103<br>
+&nbsp;&nbsp;evidence_score          0.481   -0.221<br>
+&nbsp;&nbsp;witness_count           0.389    0.412<br>
+&nbsp;&nbsp;crime_severity          0.291   -0.501<br>
+&nbsp;&nbsp;motive_strength         0.447    0.318<br>
+&nbsp;&nbsp;days_open              -0.381    0.652<br>
+<br>
+Projected shape: (120, 2)  (6D → 2D)<br>
+PC1 + PC2 capture 59.6% of total variance<br>
+<br>
+Saved → plots/pca_scree.png<br>
+Saved → plots/pca_true_labels.png<br>
+Saved → plots/pca_kmeans.png
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>PC1 captures 38% of variance. Does that mean 62% of the information is lost when you use PC1 alone?</p>
+  <p>And: if you project to 2D for visualisation, does that change the clustering you'd get from k-Means?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> Yes — 62% of variance is discarded when using PC1 alone. Whether that matters depends on what you're doing: for visualisation, losing variance is fine because you can still see structure. For clustering or classification, discarding variance can hurt performance. This is why we ran k-Means in the original 6D space and only used PCA for the plot — clustering in the full space preserves all information.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Does PCA require feature scaling?</div>
+  <div class="qa-a">Yes. PCA finds directions of maximum variance, and variance is measured in the original units. A feature with values 0-365 will dominate a feature with values 0-10. Always StandardScale before PCA.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What's the difference between PCA and feature selection?</div>
+  <div class="qa-a">Feature selection picks a subset of the original features (keep "evidence_score", drop "suspect_age"). PCA creates entirely new features (PC1, PC2) that are linear combinations of all originals. PCA features are not interpretable as original measurements — you can't say "PC1 is evidence_score."</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: How many components should I keep?</div>
+  <div class="qa-a">Common rule: keep enough components to explain 90-95% of variance. Alternatively, look at the scree plot and stop at the elbow. For visualisation purposes, 2 or 3 components are the practical maximum.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Can PCA be used as a preprocessing step before classification?</div>
+  <div class="qa-a">Yes — and it helps when you have many correlated features or want to speed up training. But fit the PCA on training data only, then transform both train and test. Using sklearn: Pipeline([("pca", PCA(n_components=k)), ("clf", LogisticRegression())]). The pipeline handles the fit/transform split correctly.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 15 — Feature Engineering</strong><br>
+  Raw features are rarely in the right form for ML models. Module 15 covers encoding categorical variables, scaling numerical ones, and combining it all into an sklearn Pipeline so that preprocessing is always applied correctly to both train and test data — no leakage, no surprises.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_13/tutorial.html">← Module 13: k-Means</a>
+  <a href="../module_15/tutorial.html">Module 15: Feature Engineering →</a>
+</div>
+
+</body>
+</html>
