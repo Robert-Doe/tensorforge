@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 05 — Logistic Regression: Classifying Suspects</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#f0883e;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.7;padding:2rem}
+  h1{color:var(--accent);font-size:2rem;margin-bottom:.4rem}
+  h2{color:var(--green);font-size:1.3rem;margin:2rem 0 .8rem;border-left:3px solid var(--green);padding-left:.8rem}
+  h3{color:var(--orange);font-size:1.05rem;margin:1.2rem 0 .4rem}
+  p,li{color:var(--text);margin-bottom:.6rem}
+  ul,ol{padding-left:1.5rem}
+  code{background:var(--panel);padding:.15rem .4rem;border-radius:4px;font-family:'Fira Code',monospace;font-size:.88em;color:var(--accent)}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  pre code{background:none;padding:0;color:var(--text)}
+  .badge{display:inline-block;background:var(--accent);color:#000;font-size:.75rem;padding:.2rem .6rem;border-radius:12px;font-weight:700;margin-right:.4rem}
+  .warn{background:#2d1c1c;border-left:4px solid var(--red);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .tip{background:#1c2d1c;border-left:4px solid var(--green);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .info{background:#1c1c2d;border-left:4px solid var(--accent);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem}
+  .qa{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.8rem 0}
+  .qa .q{color:var(--orange);font-weight:600}
+  .qa .a{color:var(--muted);margin-top:.4rem}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--panel);color:var(--accent);padding:.6rem 1rem;text-align:left;border:1px solid var(--border)}
+  td{padding:.5rem 1rem;border:1px solid var(--border);color:var(--text)}
+  .breadcrumb{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem}
+  .math{font-family:'Fira Code',monospace;background:var(--panel);padding:.4rem .8rem;border-radius:6px;display:inline-block;margin:.3rem 0;color:var(--purple)}
+  .cm{display:grid;grid-template-columns:auto 1fr 1fr;gap:2px;width:280px;font-family:'Fira Code',monospace;font-size:.85rem;margin:1rem 0}
+  .cm-cell{background:var(--panel);border:1px solid var(--border);padding:.4rem .6rem;text-align:center}
+  .cm-header{color:var(--muted);font-size:.8rem}
+  .tp{background:#1c2d1c;color:var(--green)}
+  .tn{background:#1c1c2d;color:var(--accent)}
+  .fp{background:#2d2d1c;color:var(--orange)}
+  .fn{background:#2d1c1c;color:var(--red)}
+</style>
+</head>
+<body>
+<div class="breadcrumb">Detective Agency ML Curriculum › Module 05</div>
+<h1>Module 05 — Logistic Regression: Classifying Suspects</h1>
+<p><span class="badge">Beginner</span> When the answer isn't a number but a category — fraud or not, guilty or innocent — logistic regression gives you a probability and a verdict.</p>
+
+<h2>00 — From Regression to Classification</h2>
+<p>Linear regression outputs any real number. For classification we need a value between 0 and 1 — a probability. We get it by passing the linear output through the <strong>sigmoid function</strong>:</p>
+<div class="math">σ(z) = 1 / (1 + e^(-z))</div>
+<div class="math">P(fraud | x) = σ(β₀ + β₁x₁ + β₂x₂ + ...)</div>
+<p>The sigmoid squashes any real number into (0, 1). Large positive z → probability near 1. Large negative z → probability near 0.</p>
+
+<h2>01 — Why Not Linear Regression for Classification?</h2>
+<div class="grid">
+  <div class="card">
+    <h3>Linear regression problems</h3>
+    <ul>
+      <li>Predictions can be &lt; 0 or &gt; 1 — meaningless as probabilities</li>
+      <li>Gradient vanishes when model is confident (MSE loss on sigmoid)</li>
+      <li>Assumes errors are normally distributed — wrong for 0/1 targets</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Logistic regression solutions</h3>
+    <ul>
+      <li>Sigmoid guarantees output in (0, 1)</li>
+      <li>Cross-entropy loss has clean gradients everywhere</li>
+      <li>Maximum likelihood derivation: theoretically correct for binary targets</li>
+    </ul>
+  </div>
+</div>
+
+<h2>02 — Fitting the Model</h2>
+<pre><code>from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+
+# 1. Split first (always)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y,
+    test_size=0.2, stratify=y, random_state=42)
+
+# 2. Scale features (logistic regression uses gradient descent internally)
+scaler = StandardScaler()
+X_tr_s = scaler.fit_transform(X_tr)   # fit on train only
+X_te_s = scaler.transform(X_te)       # apply same params to test
+
+# 3. Fit
+model = LogisticRegression(C=1.0, max_iter=1000, random_state=42)
+model.fit(X_tr_s, y_tr)
+
+# 4. Predict
+y_pred       = model.predict(X_te_s)          # hard label: 0 or 1
+y_pred_proba = model.predict_proba(X_te_s)    # soft: [[P(0), P(1)], ...]
+fraud_probs  = y_pred_proba[:, 1]             # P(fraud) for each sample</code></pre>
+
+<div class="info"><strong>The C parameter:</strong> C = 1/λ where λ is the regularisation strength. Smaller C = stronger regularisation (simpler model). Default C=1. Tune with cross-validation.</div>
+
+<h2>03 — The Confusion Matrix</h2>
+<p>Four possible outcomes for any binary prediction:</p>
+<div class="cm">
+  <div class="cm-cell cm-header"></div>
+  <div class="cm-cell cm-header">Predicted: No Fraud</div>
+  <div class="cm-cell cm-header">Predicted: Fraud</div>
+  <div class="cm-cell cm-header">Actual: No Fraud</div>
+  <div class="cm-cell tn">TN ✓<br>Correct reject</div>
+  <div class="cm-cell fp">FP ✗<br>False alarm</div>
+  <div class="cm-cell cm-header">Actual: Fraud</div>
+  <div class="cm-cell fn">FN ✗<br>Missed fraud!</div>
+  <div class="cm-cell tp">TP ✓<br>Caught it</div>
+</div>
+<ul>
+  <li><strong>FP (False Positive)</strong> — legitimate flagged as fraud. Annoying but recoverable.</li>
+  <li><strong>FN (False Negative)</strong> — real fraud missed. The costly mistake in fraud detection.</li>
+</ul>
+
+<h2>04 — Classification Metrics</h2>
+<table>
+  <tr><th>Metric</th><th>Formula</th><th>Question answered</th></tr>
+  <tr><td>Accuracy</td><td>(TP+TN)/(TP+TN+FP+FN)</td><td>Overall correct fraction</td></tr>
+  <tr><td>Precision</td><td>TP/(TP+FP)</td><td>Of those flagged as fraud, how many really were?</td></tr>
+  <tr><td>Recall (TPR)</td><td>TP/(TP+FN)</td><td>Of all real fraud, how many did we catch?</td></tr>
+  <tr><td>F1-score</td><td>2·P·R/(P+R)</td><td>Harmonic mean of precision and recall</td></tr>
+  <tr><td>ROC-AUC</td><td>Area under ROC curve</td><td>Overall ranking quality; 1=perfect, 0.5=random</td></tr>
+</table>
+<div class="warn"><strong>Accuracy is misleading on imbalanced data.</strong> If only 2% of transactions are fraud, a model that always predicts "not fraud" gets 98% accuracy — but catches zero fraud cases. Use Precision, Recall, F1, and AUC instead.</div>
+<pre><code>from sklearn.metrics import (accuracy_score, precision_score, recall_score,
+                              f1_score, roc_auc_score, classification_report)
+
+print(classification_report(y_te, y_pred, target_names=["Legit","Fraud"]))
+auc = roc_auc_score(y_te, fraud_probs)</code></pre>
+
+<h2>05 — The ROC Curve</h2>
+<p>The ROC curve sweeps the decision threshold from 0 to 1 and plots <strong>True Positive Rate (Recall)</strong> vs <strong>False Positive Rate</strong> at each threshold. A perfect model hugs the top-left corner.</p>
+<pre><code>from sklearn.metrics import roc_curve
+fpr, tpr, thresholds = roc_curve(y_te, fraud_probs)
+ax.plot(fpr, tpr, label=f"AUC={auc:.3f}")
+ax.plot([0,1],[0,1], linestyle="--", color="grey")  # random baseline</code></pre>
+
+<h2>06 — Threshold Tuning</h2>
+<p>Default threshold = 0.5. In fraud detection we often prefer higher recall (catch more fraud) at the cost of lower precision (more false alarms). Tune the threshold to match business requirements.</p>
+<pre><code>for threshold in [0.3, 0.4, 0.5, 0.6, 0.7]:
+    y_pred_t = (fraud_probs >= threshold).astype(int)
+    p = precision_score(y_te, y_pred_t)
+    r = recall_score(y_te,    y_pred_t)
+    print(f"t={threshold:.1f}  precision={p:.3f}  recall={r:.3f}")</code></pre>
+
+<h2>07 — Feature Scaling Reminder</h2>
+<pre><code># WRONG — fitting scaler on all data before split
+scaler.fit(X)                    # test data has leaked into scaler params!
+X_scaled = scaler.transform(X)
+X_tr, X_te = train_test_split(X_scaled, ...)
+
+# CORRECT — fit on train only
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, ...)
+scaler.fit(X_tr)                 # learn mean/std from train only
+X_tr_s = scaler.transform(X_tr)
+X_te_s = scaler.transform(X_te) # apply train params to test</code></pre>
+
+<h2>08 — Q&amp;A Brain Check</h2>
+<div class="qa"><div class="q">Q: Why do we use <code>stratify=y</code> in the train-test split?</div>
+<div class="a">A: With an imbalanced dataset (e.g. 15% fraud), a random split might produce a test set with only 5% or 25% fraud. Stratification forces both splits to maintain the same class ratio as the original data, giving a reliable evaluation.</div></div>
+<div class="qa"><div class="q">Q: When should you optimise for precision vs recall?</div>
+<div class="a">A: Optimise for <strong>recall</strong> when missing a positive is costly (fraud detection, cancer screening — missing a case is dangerous). Optimise for <strong>precision</strong> when false alarms are costly (spam filtering — too many false alarms = users ignore it). F1 balances both equally.</div></div>
+<div class="qa"><div class="q">Q: What does AUC = 0.5 mean?</div>
+<div class="a">A: The model's ranking is no better than random — it cannot distinguish between the two classes. AUC measures ranking quality: does the model assign higher scores to positive examples than negative ones, regardless of the threshold?</div></div>
+<div class="qa"><div class="q">Q: Can logistic regression handle multi-class problems?</div>
+<div class="a">A: Yes. Use <code>multi_class="multinomial"</code> (softmax regression) for more than 2 classes. sklearn handles this automatically when y has &gt;2 unique values. See logistic_advanced.py for the softmax derivation.</div></div>
+
+<h2>09 — What's Next</h2>
+<ul>
+  <li><strong>Module 06:</strong> KNN — classify by nearest neighbours</li>
+  <li><strong>logistic_advanced.py:</strong> softmax multi-class, regularisation path, class imbalance, calibration</li>
+</ul>
+</body>
+</html>
