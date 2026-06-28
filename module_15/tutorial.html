@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 15 — Feature Engineering</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  .callout.red{border-color:var(--red)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .pipe-flow{display:flex;align-items:center;gap:.4rem;margin:1rem 0;flex-wrap:wrap}
+  .pipe-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.7rem 1rem;font-size:.85rem;text-align:center}
+  .arrow{color:var(--muted);font-size:1.3rem}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 10 (sklearn basics). The single most important new concept: <strong>data leakage</strong> — accidentally letting test data influence your preprocessing.</p>
+  <p><strong>No new installs</strong> — all tools are in scikit-learn.</p>
+</div>
+</section>
+
+<h1>Module 15 — Feature Engineering &amp; Pipelines</h1>
+<h2>Preparing evidence correctly before the trial</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Detective Ada is preparing evidence folders for court. Raw evidence isn't usable as-is: fingerprint match scores range 0-100 but DNA confidence scores range 0-1. If the judge treats these the same, evidence_score dominates purely because of its scale.</p>
+<p>She also has location names ("Downtown", "Suburbs") — but ML models need numbers. She creates a separate Yes/No column for each location. That's <strong>one-hot encoding</strong>.</p>
+<p>The critical rule: <strong>prepare the evidence folders using only information from previous cases</strong>. If she uses statistics from the cases being presented in court to normalise the evidence, she's contaminating the trial. That's <strong>data leakage</strong>.</p>
+<p>sklearn's <strong>Pipeline</strong> enforces this rule automatically.</p>
+</section>
+
+<section>
+<h2>02 · Encoding Categorical Features</h2>
+<table>
+  <tr><th>Method</th><th>Output</th><th>Use when</th></tr>
+  <tr><td><strong>OrdinalEncoder</strong></td><td>Single integer column</td><td>Categories have a natural order (Low=0, Med=1, High=2)</td></tr>
+  <tr><td><strong>OneHotEncoder</strong></td><td>k binary columns (one per category)</td><td>Categories have no order (Downtown, Suburbs, Warehouse)</td></tr>
+  <tr><td><strong>Target encoding</strong></td><td>Single float (mean target per category)</td><td>High-cardinality categories; needs careful CV to avoid leakage</td></tr>
+</table>
+
+<pre><code># Before encoding
+location: ["Downtown", "Suburbs", "Warehouse", "Downtown"]
+
+# After OneHotEncoder
+location_Downtown: [1, 0, 0, 1]
+location_Suburbs:  [0, 1, 0, 0]
+location_Warehouse:[0, 0, 1, 0]</code></pre>
+</section>
+
+<section>
+<h2>03 · Scaling Numerical Features</h2>
+<table>
+  <tr><th>Scaler</th><th>Formula</th><th>Output range</th><th>Use when</th></tr>
+  <tr><td>StandardScaler</td><td>(x - mean) / std</td><td>~(-3, 3)</td><td>Normal-ish distribution; most ML models</td></tr>
+  <tr><td>MinMaxScaler</td><td>(x - min) / (max - min)</td><td>[0, 1]</td><td>Need hard 0-1 range; neural networks</td></tr>
+  <tr><td>RobustScaler</td><td>(x - median) / IQR</td><td>Varies</td><td>Data with many outliers</td></tr>
+</table>
+
+<div class="callout warn">
+  <strong>Tree-based models (RF, Decision Trees, GB) don't need scaling.</strong> They split on thresholds, not distances. Only apply scaling for distance-based (KNN, SVM) or gradient-based models (Logistic Regression, Neural Networks).
+</div>
+</section>
+
+<section>
+<h2>04 · ColumnTransformer + Pipeline</h2>
+<pre><code>from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.linear_model import LogisticRegression
+
+# Different transforms for different column types
+preprocessor = ColumnTransformer([
+    ("num", StandardScaler(), ["suspect_age", "evidence_score", ...]),
+    ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+            ["location"]),
+])
+
+# Chain preprocessor + model — fit() and predict() handle both
+pipe = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model",        LogisticRegression(max_iter=1000)),
+])
+
+pipe.fit(X_train, y_train)    # scaler fits on X_train only
+pipe.predict(X_test)          # scaler transforms X_test using train stats</code></pre>
+</section>
+
+<section>
+<h2>05 · Data Leakage — The Silent Killer</h2>
+<div class="callout red">
+  <strong>Wrong (leaky):</strong>
+<pre style="margin:.5rem 0;border:none;background:none;padding:0"><code>scaler = StandardScaler()
+X_all_scaled = scaler.fit_transform(X)   # ← test data influences the scaler!
+X_train, X_test = train_test_split(X_all_scaled, ...)
+# The scaler's mean and std were computed using test samples.
+# Your CV score is optimistically inflated. Real-world performance will be worse.</code></pre>
+</div>
+
+<div class="callout" style="border-color:var(--green)">
+  <strong>Right (Pipeline):</strong>
+<pre style="margin:.5rem 0;border:none;background:none;padding:0"><code>pipe = Pipeline([("scaler", StandardScaler()), ("lr", LogisticRegression())])
+cross_val_score(pipe, X, y, cv=5)
+# Inside each fold: scaler.fit(X_train_fold) → scaler.transform(X_test_fold)
+# Test data never touches fit(). CV score is trustworthy.</code></pre>
+</div>
+</section>
+
+<section>
+<h2>06 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_15&gt; python main.py</span><br><br>
+MODULE 15 — Feature Engineering &amp; Pipelines<br>
+====================================================<br>
+Feature columns: ['location', 'suspect_age', 'evidence_score', ...]<br>
+Location unique values: ['Downtown', 'Rural', 'Suburbs', 'Warehouse']<br>
+<br>
+=== Effect of Scaling on Logistic Regression ===<br>
+&nbsp;&nbsp;No scaling      : 0.692<br>
+&nbsp;&nbsp;StandardScaler  : 0.742<br>
+&nbsp;&nbsp;MinMaxScaler    : 0.738<br>
+<br>
+=== Full Pipeline (numeric + categorical) ===<br>
+&nbsp;&nbsp;LogisticRegression     CV=0.750  AUC=0.807<br>
+&nbsp;&nbsp;RandomForest           CV=0.758  AUC=0.834<br>
+<br>
+Preprocessor output shape: (96, 10)<br>
+&nbsp;&nbsp;Input:  7 columns (6 numeric + 1 categorical)<br>
+&nbsp;&nbsp;Output: 10 columns (6 scaled + 4 one-hot dummies)<br>
+<br>
+=== Pipeline vs. Manual (leakage demo) ===<br>
+&nbsp;&nbsp;Leaky manual scaling CV  : 0.758  ← optimistic (wrong)<br>
+&nbsp;&nbsp;Pipeline (no leakage) CV : 0.742  ← trustworthy (correct)<br>
+<br>
+Saved → plots/scaling_comparison.png
+</div>
+</section>
+
+<section>
+<h2>07 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The leaky CV score (0.758) is higher than the pipeline CV (0.742). Does that mean leakage always makes models look better?</p>
+  <p>And: why does adding the location column (4 one-hot dummies) improve performance from 0.742 to 0.750?</p>
+</div>
+<div class="callout">
+  <strong>Answer 1:</strong> Yes — leakage almost always inflates estimated performance because the model gets to "peek" at test data statistics during training. The real-world score will be closer to the pipeline (non-leaky) number.<br><br>
+  <strong>Answer 2:</strong> Location captures information about where crimes happen, which correlates with crime type and solvability. By encoding it numerically, the model can learn "crimes in Downtown are X% more likely to be solved." Dropping location (as M02-M14 did) discarded this signal.
+</div>
+</section>
+
+<section>
+<h2>08 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: What does handle_unknown="ignore" do in OneHotEncoder?</div>
+  <div class="qa-a">If the test set contains a category the encoder never saw during training (e.g., a new location "Airport"), it returns an all-zeros row for that sample instead of raising an error. The model gets no location information for that case but doesn't crash. This is the safe default for production.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: When should I use MinMaxScaler instead of StandardScaler?</div>
+  <div class="qa-a">Use MinMaxScaler when your model explicitly requires inputs in [0, 1] (e.g., some neural network activation functions, or when you want pixel values). StandardScaler is the better default for most ML models because it's less sensitive to outliers — an extreme value expands the [0,1] range for everyone else in MinMaxScaler.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Can I add PCA inside a Pipeline?</div>
+  <div class="qa-a">Yes: Pipeline([("preprocessor", preprocessor), ("pca", PCA(n_components=4)), ("model", LogisticRegression())]). The PCA is fit only on training data and transforms test data using training eigenvectors. No leakage.</div>
+</div>
+</section>
+
+<section>
+<h2>09 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 16 — One Neuron from Scratch</strong><br>
+  You've mastered classical ML. Now we start building neural networks. A single artificial neuron is just a linear model followed by an activation function — almost identical to the Logistic Regression you wrote in M05. But stack thousands of them in layers and you get something that can learn to recognise images, translate languages, and play chess.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_14/tutorial.html">← Module 14: PCA</a>
+  <a href="../module_16/tutorial.html">Module 16: One Neuron →</a>
+</div>
+
+</body>
+</html>
