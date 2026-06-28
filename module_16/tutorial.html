@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 16 — One Neuron</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  /* Neuron diagram */
+  .neuron-svg{max-width:520px;display:block;margin:1rem auto}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 05 (Logistic Regression). You will recognise every formula in this module — because a neuron IS a logistic regression unit.</p>
+  <p><strong>No new libraries.</strong> NumPy only — we're going back to scratch to understand DL foundations.</p>
+</div>
+</section>
+
+<h1>Module 16 — One Neuron from Scratch</h1>
+<h2>The atom of every neural network</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>A single detective informant gives Ada one piece of intelligence. She weighs it (weight), adjusts for her prior suspicion (bias), then makes a yes/no call (activation). That's it — that's a neuron.</p>
+<p>With six informants (six features), she does a <strong>weighted sum</strong> of their reports and applies a <strong>decision rule</strong>. The decision rule is the activation function.</p>
+
+<svg class="neuron-svg" viewBox="0 0 520 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- input nodes -->
+  <circle cx="60" cy="40"  r="18" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+  <circle cx="60" cy="90"  r="18" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+  <circle cx="60" cy="140" r="18" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+  <circle cx="60" cy="190" r="18" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+  <text x="60" y="45"  fill="#58a6ff" font-size="11" text-anchor="middle">x₁</text>
+  <text x="60" y="95"  fill="#58a6ff" font-size="11" text-anchor="middle">x₂</text>
+  <text x="60" y="145" fill="#58a6ff" font-size="11" text-anchor="middle">x₃</text>
+  <text x="60" y="195" fill="#58a6ff" font-size="11" text-anchor="middle">x₄</text>
+  <!-- weights on lines -->
+  <line x1="78" y1="50"  x2="210" y2="100" stroke="#30363d" stroke-width="1.5"/>
+  <line x1="78" y1="90"  x2="210" y2="100" stroke="#30363d" stroke-width="1.5"/>
+  <line x1="78" y1="140" x2="210" y2="100" stroke="#30363d" stroke-width="1.5"/>
+  <line x1="78" y1="180" x2="210" y2="100" stroke="#30363d" stroke-width="1.5"/>
+  <text x="140" y="60"  fill="#d29922" font-size="10">w₁</text>
+  <text x="150" y="85"  fill="#d29922" font-size="10">w₂</text>
+  <text x="150" y="125" fill="#d29922" font-size="10">w₃</text>
+  <text x="140" y="155" fill="#d29922" font-size="10">w₄</text>
+  <!-- neuron body -->
+  <circle cx="240" cy="100" r="30" fill="#161b22" stroke="#d29922" stroke-width="2"/>
+  <text x="240" y="96"  fill="#e6edf3" font-size="10" text-anchor="middle">Σ + b</text>
+  <text x="240" y="110" fill="#e6edf3" font-size="9"  text-anchor="middle">z = w·x+b</text>
+  <!-- activation -->
+  <line x1="270" y1="100" x2="340" y2="100" stroke="#30363d" stroke-width="1.5"/>
+  <rect x="340" y="78" width="60" height="44" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+  <text x="370" y="97"  fill="#3fb950" font-size="10" text-anchor="middle">σ(z)</text>
+  <text x="370" y="111" fill="#3fb950" font-size="9"  text-anchor="middle">activation</text>
+  <!-- output -->
+  <line x1="400" y1="100" x2="460" y2="100" stroke="#30363d" stroke-width="1.5"/>
+  <circle cx="475" cy="100" r="16" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+  <text x="475" y="104" fill="#3fb950" font-size="10" text-anchor="middle">â</text>
+  <text x="475" y="122" fill="#muted"  font-size="9"  text-anchor="middle" fill="#8b949e">prob</text>
+</svg>
+</section>
+
+<section>
+<h2>02 · The Maths (familiar from M05)</h2>
+<pre><code>z = w₁·x₁ + w₂·x₂ + ... + wₙ·xₙ + b   # linear combination
+  = X @ w + b                             # NumPy vector form
+
+a = sigmoid(z) = 1 / (1 + e⁻ᶻ)          # output: probability ∈ (0,1)
+
+loss = -mean( y·log(a) + (1-y)·log(1-a) )   # binary cross-entropy
+
+# Gradients
+dL/dw = (1/n) · Xᵀ · (a - y)
+dL/db = (1/n) · Σ(a - y)
+
+# Weight update
+w = w - lr · dL/dw
+b = b - lr · dL/db</code></pre>
+
+<div class="callout">
+  <strong>This is exactly Logistic Regression (M05).</strong> A neuron with sigmoid activation IS logistic regression. The new vocabulary (forward pass, activation, neuron) describes the same operations. Learning both vocabularies lets you read both ML papers and DL papers.
+</div>
+</section>
+
+<section>
+<h2>03 · Activation Functions</h2>
+<table>
+  <tr><th>Name</th><th>Formula</th><th>Range</th><th>Use</th></tr>
+  <tr><td><strong>Sigmoid</strong></td><td>1 / (1 + e⁻ᶻ)</td><td>(0, 1)</td><td>Binary output neuron — outputs probability</td></tr>
+  <tr><td><strong>ReLU</strong></td><td>max(0, z)</td><td>[0, ∞)</td><td>Hidden layers — fast, doesn't saturate</td></tr>
+  <tr><td><strong>Tanh</strong></td><td>(eᶻ - e⁻ᶻ) / (eᶻ + e⁻ᶻ)</td><td>(-1, 1)</td><td>Hidden layers — zero-centred (better than sigmoid)</td></tr>
+  <tr><td><strong>Softmax</strong></td><td>eᶻᵢ / Σeᶻⱼ</td><td>(0,1) each, sum=1</td><td>Multi-class output — outputs class probabilities</td></tr>
+</table>
+
+<div class="callout warn">
+  <strong>Why not sigmoid in hidden layers?</strong> Sigmoid "saturates" — for very large or small z, the gradient approaches zero and learning stalls (vanishing gradient). ReLU avoids this because its gradient is always 1 for positive z. More on this in M19.
+</div>
+</section>
+
+<section>
+<h2>04 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_16&gt; python main.py</span><br><br>
+MODULE 16 — One Neuron from Scratch<br>
+====================================================<br>
+<br>
+Single Neuron Results:<br>
+&nbsp;&nbsp;Train accuracy : 0.760<br>
+&nbsp;&nbsp;Test  accuracy : 0.750<br>
+&nbsp;&nbsp;Final loss     : 0.4821<br>
+<br>
+Learnt weights (one per feature):<br>
+&nbsp;&nbsp;suspect_age            +0.142  █<br>
+&nbsp;&nbsp;evidence_score         +0.531  █████<br>
+&nbsp;&nbsp;witness_count          +0.318  ███<br>
+&nbsp;&nbsp;crime_severity         +0.091  <br>
+&nbsp;&nbsp;motive_strength        +0.487  ████<br>
+&nbsp;&nbsp;days_open              -0.203  ██<br>
+&nbsp;&nbsp;bias                   +0.104<br>
+<br>
+Activation function demo:<br>
+&nbsp;&nbsp;z=-3  sigmoid=0.047  relu=0.000<br>
+&nbsp;&nbsp;z= 0  sigmoid=0.500  relu=0.000<br>
+&nbsp;&nbsp;z=+3  sigmoid=0.953  relu=3.000<br>
+<br>
+This neuron IS Logistic Regression — same math, different framing.<br>
+<br>
+Saved → plots/activation_functions.png<br>
+Saved → plots/neuron_loss_curve.png
+</div>
+</section>
+
+<section>
+<h2>05 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The test accuracy (0.750) matches our best Logistic Regression from M05. Does that surprise you? Should it?</p>
+  <p>Now imagine you had <em>two</em> neurons in a row. What would the second neuron receive as input? Would the output still be a linear function of x?</p>
+</div>
+<div class="callout">
+  <strong>Answer 1:</strong> No surprise — they're the same algorithm. The neuron framing is just different vocabulary for the same gradient descent on binary cross-entropy.<br><br>
+  <strong>Answer 2:</strong> The second neuron would receive the first neuron's activation (a number between 0 and 1). If the second neuron is also linear, the composition of two linear functions is still linear — no gain. The <em>non-linear activation function</em> is what breaks this chain: sigmoid(linear(sigmoid(linear(x)))) is no longer linear in x. That non-linearity is the entire reason neural networks can learn complex patterns.
+</div>
+</section>
+
+<section>
+<h2>06 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Why do we need an activation function at all?</div>
+  <div class="qa-a">Without activation functions, any stack of linear layers collapses to a single linear transformation. A 10-layer network without activations is equivalent to a single linear layer — you've built nothing more powerful than linear regression. Non-linear activations are what give neural networks their representational power.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What's the difference between a neuron and a perceptron?</div>
+  <div class="qa-a">A perceptron (1957) uses a hard step function as activation: output is exactly 0 or 1 with no gradient at the threshold. A modern neuron uses a smooth activation (sigmoid, ReLU, tanh) whose gradient exists everywhere, enabling gradient descent training. Perceptrons couldn't learn XOR; multi-layer networks with smooth activations can learn almost anything.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: The weights show evidence_score and motive_strength as most important — does that match the Random Forest feature importances from M12?</div>
+  <div class="qa-a">Yes — both methods identified evidence_score and motive_strength as the strongest predictors. Neuron weights and tree importances measure different things (gradient sensitivity vs. impurity reduction) but often agree on the top features, which validates that these features genuinely matter in the data.</div>
+</div>
+</section>
+
+<section>
+<h2>07 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 17 — Backpropagation</strong><br>
+  Training a single neuron was simple — just one layer of gradients. But a network with three layers has weights at every layer. How do you compute the gradient for weights that are far from the output? The chain rule of calculus, applied systematically. That's backpropagation — the algorithm that makes deep learning possible.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_15/tutorial.html">← Module 15: Feature Engineering</a>
+  <a href="../module_17/tutorial.html">Module 17: Backpropagation →</a>
+</div>
+
+</body>
+</html>
