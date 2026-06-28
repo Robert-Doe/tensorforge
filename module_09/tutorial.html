@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 09 — Model Evaluation</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --yellow: #d29922; --red: #f85149;
+    --teal: #39d353; --purple: #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; line-height: 1.7; padding: 2rem; max-width: 900px; margin: auto; }
+  h1 { font-size: 2.2rem; color: var(--accent); margin-bottom: .4rem; }
+  h2 { font-size: 1.4rem; color: var(--yellow); margin: 2rem 0 .8rem; }
+  h3 { color: var(--purple); margin: 1.2rem 0 .4rem; }
+  p { margin-bottom: 1rem; color: var(--text); }
+  pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; overflow-x: auto; margin: 1rem 0; }
+  code { font-family: 'Cascadia Code', 'Consolas', monospace; font-size: .9rem; color: var(--green); }
+  .callout { border-left: 4px solid var(--accent); background: var(--surface); padding: 1rem 1.4rem; border-radius: 0 8px 8px 0; margin: 1.2rem 0; }
+  .callout.warn { border-color: var(--yellow); }
+  .callout.teal { border-color: var(--teal); }
+  .callout.red  { border-color: var(--red); }
+  .badge { display: inline-block; padding: .2rem .7rem; border-radius: 20px; font-size: .8rem; font-weight: 700; margin-right: .4rem; }
+  .badge.green { background: #1a3a1f; color: var(--green); }
+  .badge.blue  { background: #0d2a4a; color: var(--accent); }
+  .badge.red   { background: #3a1a1a; color: var(--red); }
+  .badge.yellow{ background: #3a2e00; color: var(--yellow); }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  th { background: var(--surface); color: var(--accent); padding: .6rem 1rem; text-align: left; border-bottom: 2px solid var(--border); }
+  td { padding: .5rem 1rem; border-bottom: 1px solid var(--border); }
+  tr:nth-child(even) td { background: #0f141a; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem; margin: 1rem 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+  .card .num { font-size: 2rem; font-weight: 700; }
+  .card .label { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
+  .cm-grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; margin: 1rem 0; font-size: .9rem; }
+  .cm-cell { background: var(--surface); border: 1px solid var(--border); padding: .8rem; text-align: center; border-radius: 4px; }
+  .cm-header { background: none; border: none; color: var(--muted); font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .cm-tp { background: #1a3a1f; color: var(--green); }
+  .cm-tn { background: #1a3a1f; color: var(--green); }
+  .cm-fp { background: #3a1a1a; color: var(--red); }
+  .cm-fn { background: #3a1a1a; color: var(--red); }
+  .terminal { background: #000; border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; font-family: monospace; font-size: .88rem; margin: 1rem 0; }
+  .terminal .prompt { color: var(--green); }
+  .terminal .out { color: var(--text); }
+  .nav { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+  .nav a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .qa-block { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin: .8rem 0; }
+  .qa-q { padding: .8rem 1rem; color: var(--yellow); font-weight: 600; cursor: default; }
+  .qa-a { padding: .8rem 1rem; color: var(--text); border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<!-- 00 BEFORE YOU START -->
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Modules 01-08 complete. You have <code>data_loader.py</code>, <code>linear_regression.py</code>, <code>logistic_regression.py</code>, <code>knn.py</code>, <code>decision_tree.py</code>, and <code>naive_bayes.py</code> in your folder.</p>
+  <p><strong>New files this module:</strong> <code>utils.py</code> (k-fold CV), <code>evaluation.py</code> (confusion matrix, precision, recall, F1, ROC-AUC), updated <code>main.py</code>.</p>
+</div>
+<pre><code>pip install numpy==1.26.4 pandas==2.2.2 matplotlib==3.9.0 seaborn==0.13.2</code></pre>
+</section>
+
+<!-- 01 BIG ANALOGY -->
+<h1>Module 09 — Model Evaluation</h1>
+<h2>How good is your detective, really?</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Imagine the Chief of Police asks: <em>"How well is Detective Ada solving cases?"</em></p>
+<p>Ada says "I solved 80 cases!" — but out of how many? What if she labelled every case "unsolved" and only 20% were actually solved? She'd be right 80% of the time by doing <em>nothing</em>. <strong>Accuracy alone is a liar.</strong></p>
+
+<p>Real performance has four outcomes every time Ada makes a prediction:</p>
+
+<div class="cm-grid">
+  <div class="cm-header"></div>
+  <div class="cm-header">Predicted SOLVED</div>
+  <div class="cm-header">Predicted UNSOLVED</div>
+
+  <div class="cm-header" style="writing-mode:vertical-rl;transform:rotate(180deg);padding:.5rem">Actual SOLVED</div>
+  <div class="cm-cell cm-tp"><strong>TP</strong><br>True Positive<br><small>Ada said solved, it was</small></div>
+  <div class="cm-cell cm-fn"><strong>FN</strong><br>False Negative<br><small>Ada missed a real case</small></div>
+
+  <div class="cm-header" style="writing-mode:vertical-rl;transform:rotate(180deg);padding:.5rem">Actual UNSOLVED</div>
+  <div class="cm-cell cm-fp"><strong>FP</strong><br>False Positive<br><small>Ada cried wolf</small></div>
+  <div class="cm-cell cm-tn"><strong>TN</strong><br>True Negative<br><small>Correctly said unsolved</small></div>
+</div>
+
+<div class="grid-4">
+  <div class="card"><div class="num" style="color:var(--green)">TP</div><div class="label">Hit — caught it</div></div>
+  <div class="card"><div class="num" style="color:var(--red)">FP</div><div class="label">False alarm — cry wolf</div></div>
+  <div class="card"><div class="num" style="color:var(--red)">FN</div><div class="label">Miss — slipped away</div></div>
+  <div class="card"><div class="num" style="color:var(--green)">TN</div><div class="label">Correct silence</div></div>
+</div>
+</section>
+
+<!-- 02 CONFUSION MATRIX CODE -->
+<section>
+<h2>02 · Confusion Matrix from Scratch</h2>
+<pre><code>def confusion_matrix(y_true, y_pred, n_classes=2):
+    """Count TP, FP, TN, FN in a square matrix.
+
+    Args:
+        y_true: ground-truth labels (1-D int array)
+        y_pred: predicted labels   (1-D int array)
+        n_classes: number of distinct classes (default 2)
+
+    Returns:
+        cm: ndarray shape (n_classes, n_classes)
+            cm[actual][predicted]
+    """
+    cm = np.zeros((n_classes, n_classes), dtype=int)
+    for actual, predicted in zip(y_true, y_pred):
+        cm[actual][predicted] += 1   # tally each (actual, predicted) pair
+    return cm</code></pre>
+
+<p>Reading the matrix: <code>cm[1][0]</code> = "actual positive, predicted negative" = <strong>False Negative</strong>. That's the dangerous cell — the criminal who walked free.</p>
+</section>
+
+<!-- 03 PRECISION RECALL F1 -->
+<section>
+<h2>03 · Precision, Recall, and F1</h2>
+
+<div class="callout warn">
+  <strong>Why not just use accuracy?</strong> If 95% of cases are unsolved, a model that always predicts "unsolved" gets 95% accuracy and catches <em>zero</em> real criminals. Precision and recall expose this.
+</div>
+
+<pre><code>precision = tp / (tp + fp)   # don't cry wolf — how reliable are positive predictions?
+recall    = tp / (tp + fn)   # don't miss cases — how many real positives did you catch?
+f1        = 2 * precision * recall / (precision + recall + 1e-9)
+            # harmonic mean — punishes models that are great at one but terrible at the other</code></pre>
+
+<table>
+  <tr><th>Metric</th><th>Answers</th><th>Good when...</th></tr>
+  <tr><td>Precision</td><td>"Of everything I called SOLVED, how many were?"</td><td>False alarms are expensive (waste police time)</td></tr>
+  <tr><td>Recall</td><td>"Of all real SOLVED cases, how many did I catch?"</td><td>Misses are expensive (criminal walks free)</td></tr>
+  <tr><td>F1</td><td>"Are both precision AND recall decent?"</td><td>You care about both equally</td></tr>
+</table>
+
+<pre><code>def precision_recall_f1(y_true, y_pred):
+    """Compute precision, recall, and F1 for binary classification.
+
+    Uses epsilon=1e-9 in denominators to avoid division-by-zero
+    when the model predicts only one class.
+
+    Returns:
+        tuple: (precision, recall, f1) all floats in [0, 1]
+    """
+    EPSILON = 1e-9          # prevents zero-division when tp+fp==0 or tp+fn==0
+    tp = np.sum((y_pred == 1) & (y_true == 1))   # predicted positive, actually positive
+    fp = np.sum((y_pred == 1) & (y_true == 0))   # predicted positive, actually negative
+    fn = np.sum((y_pred == 0) & (y_true == 1))   # predicted negative, actually positive
+
+    precision = tp / (tp + fp + EPSILON)
+    recall    = tp / (tp + fn + EPSILON)
+    f1        = 2 * precision * recall / (precision + recall + EPSILON)
+    return float(precision), float(recall), float(f1)</code></pre>
+</section>
+
+<!-- 04 CROSS-VALIDATION -->
+<section>
+<h2>04 · K-Fold Cross-Validation</h2>
+<p>A single train/test split is like judging a detective on just one case. What if it was a lucky case? <strong>K-fold CV</strong> tests her on <em>k</em> different held-out sets and averages the result.</p>
+
+<pre><code>def cross_val_accuracy(model_class, model_kwargs, X, y, k=5):
+    """Run k-fold cross-validation and return mean ± std accuracy.
+
+    Args:
+        model_class: an uninstantiated classifier class
+        model_kwargs: dict of constructor arguments
+        X: feature matrix (n_samples, n_features)
+        y: labels (n_samples,)
+        k: number of folds (default 5)
+
+    Returns:
+        (mean_accuracy, std_accuracy): floats
+    """
+    rng = np.random.default_rng(RANDOM_SEED)
+    indices = rng.permutation(len(X))          # shuffle to avoid ordering bias
+    folds   = np.array_split(indices, k)       # split shuffled indices into k groups
+
+    scores = []
+    for fold_idx in range(k):
+        test_idx  = folds[fold_idx]            # this fold is the test set
+        train_idx = np.concatenate(            # all other folds are training
+            [folds[i] for i in range(k) if i != fold_idx]
+        )
+        model = model_class(**model_kwargs)    # fresh model every fold
+        model.fit(X[train_idx], y[train_idx])
+        preds = model.predict(X[test_idx])
+        scores.append(np.mean(preds == y[test_idx]))
+
+    return float(np.mean(scores)), float(np.std(scores))</code></pre>
+
+<div class="callout">
+  <strong>Rule of thumb:</strong> k=5 or k=10 are the standard choices. k=5 is faster; k=10 gives a slightly more reliable estimate. This module uses k=5.
+</div>
+</section>
+
+<!-- 05 ROC-AUC -->
+<section>
+<h2>05 · ROC Curve &amp; AUC</h2>
+<p>Ada doesn't just say "solved" or "unsolved" — she gives a <em>confidence score</em> (probability). The ROC curve asks: <em>at every possible confidence threshold, how many real criminals did you catch (recall) vs. how many innocent people did you wrongly flag (false positive rate)?</em></p>
+
+<pre><code>def roc_auc(y_true, y_prob):
+    """Compute ROC curve points and AUC via threshold sweep.
+
+    Sweeps unique probability thresholds from high to low.
+    At each threshold: predict positive if prob >= threshold.
+    Builds (fpr, tpr) pairs. AUC = area under that curve via trapz.
+
+    Args:
+        y_true: ground-truth binary labels
+        y_prob: predicted probabilities for the positive class
+
+    Returns:
+        (fpr_list, tpr_list, auc_score)
+    """
+    thresholds = np.unique(y_prob)[::-1]   # sweep from high confidence to low
+    fpr_list, tpr_list = [0.0], [0.0]     # start at (0,0) — catch nothing
+
+    pos   = np.sum(y_true == 1)            # total real positives
+    neg   = np.sum(y_true == 0)            # total real negatives
+
+    for thresh in thresholds:
+        preds = (y_prob >= thresh).astype(int)
+        tp = np.sum((preds == 1) & (y_true == 1))
+        fp = np.sum((preds == 1) & (y_true == 0))
+        fpr_list.append(fp / (neg + 1e-9))
+        tpr_list.append(tp / (pos + 1e-9))
+
+    fpr_list.append(1.0); tpr_list.append(1.0)   # end at (1,1) — flag everything
+    auc = float(np.trapz(tpr_list, fpr_list))     # area under the curve
+    return fpr_list, tpr_list, auc</code></pre>
+
+<div class="callout">
+  <strong>AUC interpretation:</strong> 0.5 = random guessing (useless), 0.7 = decent, 0.8+ = good, 0.9+ = excellent, 1.0 = perfect (suspicious — probably overfitting).
+</div>
+</section>
+
+<!-- 06 RUN IT -->
+<section>
+<h2>06 · Run It</h2>
+<div class="terminal">
+  <div class="prompt">PS C:\bob_ml_dl\module_09&gt; python main.py</div>
+  <div class="out"><br>
+=== K-Fold Cross-Validation (k=5) ===<br>
+LogisticRegression : 0.742 ± 0.038<br>
+KNearestNeighbors  : 0.708 ± 0.051<br>
+DecisionTree       : 0.700 ± 0.045<br>
+NaiveBayes         : 0.725 ± 0.042<br>
+<br>
+=== Precision / Recall / F1 (test split) ===<br>
+LogisticRegression : P=0.74  R=0.71  F1=0.72<br>
+KNearestNeighbors  : P=0.69  R=0.68  F1=0.68<br>
+DecisionTree       : P=0.68  R=0.70  F1=0.69<br>
+NaiveBayes         : P=0.73  R=0.69  F1=0.71<br>
+<br>
+=== ROC-AUC ===<br>
+LogisticRegression : AUC = 0.793<br>
+NaiveBayes         : AUC = 0.781<br>
+<br>
+Plots saved → plots/confusion_matrix_lr.png<br>
+Plots saved → plots/roc_curves.png
+  </div>
+</div>
+</section>
+
+<!-- 07 BRAIN EXERCISE -->
+<section>
+<h2>07 · Brain Exercise</h2>
+<div class="callout warn">
+  <p><strong>Try this before reading the answer:</strong></p>
+  <p>You have a model with precision=0.90 and recall=0.20. What does that tell you about the model's behavior? Is it useful? What would you change?</p>
+  <p><em>Think: what kind of errors is it making? What would you adjust to improve recall?</em></p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> The model is extremely conservative — it only predicts "positive" when it's almost certain, so it barely cries wolf (high precision) but misses 80% of real positives (low recall). To improve recall, lower the decision threshold below 0.5. You'll catch more criminals but also get more false alarms — a trade-off you control.
+</div>
+</section>
+
+<!-- 08 Q&A -->
+<section>
+<h2>08 · Q&amp;A</h2>
+
+<div class="qa-block">
+  <div class="qa-q">Q: Why is accuracy misleading on imbalanced datasets?</div>
+  <div class="qa-a">If 95% of your data is class 0, predicting class 0 for everything gives 95% accuracy with zero predictive value. Precision, recall, and F1 all reveal this immediately because they focus on the minority (positive) class.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q: Why use k-fold instead of a single train/test split?</div>
+  <div class="qa-a">A single split is sensitive to which samples land in test vs train — you might accidentally get an easy or hard split. K-fold averages over k different splits, giving a more reliable and less variable estimate of true performance.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q: What does AUC=0.5 mean exactly?</div>
+  <div class="qa-a">It means your model's ranking of samples by probability is no better than random. At every threshold, your true-positive rate equals your false-positive rate — you might as well flip a coin.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q: Can I use these evaluation functions on multi-class problems?</div>
+  <div class="qa-a">The confusion matrix already supports n_classes > 2. Precision/recall/F1 in this module are binary-only; for multi-class you'd compute them per-class and average (macro or weighted averaging), which scikit-learn handles automatically in Module 10.</div>
+</div>
+</section>
+
+<!-- 09 WHAT'S NEXT -->
+<section>
+<h2>09 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 10 — Scikit-learn Intro</strong><br>
+  You've built Linear Regression, Logistic Regression, KNN, Decision Trees, and Naive Bayes from scratch. Now watch what happens when you replicate all five in 5 lines each using scikit-learn. Same math, zero boilerplate — and you'll understand exactly what's happening under the hood because you wrote it yourself first.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_08/tutorial.html">← Module 08: Naive Bayes</a>
+  <a href="../module_10/tutorial.html">Module 10: Scikit-learn →</a>
+</div>
+
+</body>
+</html>
