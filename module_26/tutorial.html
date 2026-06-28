@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 26 — Transfer Learning</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  .callout.red{border-color:var(--red)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  /* Layer freeze diagram */
+  .arch-freeze{display:flex;gap:.5rem;margin:1rem 0;flex-wrap:wrap}
+  .layer-box{padding:.5rem .9rem;border-radius:8px;font-size:.82rem;text-align:center;border:1px solid}
+  .frozen{background:#1a1a2e;border-color:var(--muted);color:var(--muted)}
+  .trainable{background:#1a2e1a;border-color:var(--green);color:var(--green)}
+  .arrow-right{color:var(--muted);align-self:center;font-size:1.2rem}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Modules 24–25 (CNNs in PyTorch, BatchNorm, Dropout). PyTorch and torchvision must be installed.</p>
+  <p><strong>Downloads:</strong> ResNet-18 weights (~45 MB, once) + CIFAR-10 (~170 MB, once).</p>
+  <p><strong>Key idea:</strong> A network trained on 1.28 million images already knows how to detect edges, textures, and shapes. You can steal those skills and apply them to your task — training only a tiny new head instead of the entire network from scratch.</p>
+</div>
+</section>
+
+<h1>Module 26 — Transfer Learning</h1>
+<h2>Ada acquires a veteran detective's case files and ignores rookie mistakes</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Imagine Ada needs to solve cases in a new city she's never worked in. Starting completely from scratch, she'd need years to learn the local street layout, criminal patterns, and informant network. But there's a veteran detective — let's call her ResNet — who spent 20 years working cases in 1,000 different cities (ImageNet classes). ResNet's brain is packed with hard-won pattern recognition: she can spot a suspicious vehicle, recognise a wanted face in a crowd, and identify which neighbourhood a photo was taken in.</p>
+<p>Ada doesn't need to re-learn all of that. She borrows ResNet's brain (frozen — don't change what works), glues on her own small decision module on top (the new classification head), and trains only that module on her local cases (CIFAR-10). The borrowed brain provides universal visual skills; the new head specialises them for the local task.</p>
+<p>After just 5 epochs with a frozen backbone, Ada's new module reaches ~88% accuracy on categories it's never seen during its 20-year career — because the underlying visual skills transfer perfectly.</p>
+</section>
+
+<section>
+<h2>02 · What Is Frozen vs Trainable?</h2>
+
+<div class="arch-freeze">
+  <div class="layer-box frozen">conv1<br>frozen</div>
+  <span class="arrow-right">→</span>
+  <div class="layer-box frozen">layer1<br>frozen</div>
+  <span class="arrow-right">→</span>
+  <div class="layer-box frozen">layer2<br>frozen</div>
+  <span class="arrow-right">→</span>
+  <div class="layer-box frozen">layer3<br>frozen</div>
+  <span class="arrow-right">→</span>
+  <div class="layer-box frozen">layer4<br>frozen</div>
+  <span class="arrow-right">→</span>
+  <div class="layer-box frozen">avgpool<br>frozen</div>
+  <span class="arrow-right">→</span>
+  <div class="layer-box trainable">New head<br>trainable</div>
+</div>
+
+<p>"Frozen" means <code>param.requires_grad = False</code>. Gradients flow through frozen layers during the backward pass (they must — to reach the head), but no weight update is applied. Only the trainable layers are updated by the optimizer.</p>
+</section>
+
+<section>
+<h2>03 · The Code</h2>
+<pre><code>from torchvision import models
+
+# Load ImageNet-pretrained ResNet-18
+model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+
+# Freeze the backbone — no updates to conv/BN/residual layers
+for param in model.parameters():
+    param.requires_grad = False
+
+# Replace the output head (was 1000 ImageNet classes → now 10 CIFAR classes)
+in_features = model.fc.in_features         # 512 for ResNet-18
+model.fc = nn.Sequential(
+    nn.Linear(in_features, 256),
+    nn.BatchNorm1d(256),
+    nn.ReLU(inplace=True),
+    nn.Dropout(p=0.4),
+    nn.Linear(256, 10),                    # 10 CIFAR-10 classes
+)
+
+# Only pass trainable params to optimizer — frozen params waste memory in Adam
+optimizer = optim.Adam(
+    filter(lambda p: p.requires_grad, model.parameters()),
+    lr=1e-3
+)</code></pre>
+
+<div class="callout warn">
+  <strong>ImageNet normalisation is mandatory.</strong> ResNet's convolutional filters learned to activate on images normalised with ImageNet statistics (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]). Feeding it raw pixels or MNIST-normalised images produces garbage features. Always match the normalisation used during pretraining.
+</div>
+</section>
+
+<section>
+<h2>04 · Three Strategies</h2>
+<table>
+  <tr><th>Strategy</th><th>What's trained</th><th>LR</th><th>Best when</th></tr>
+  <tr>
+    <td><strong>Frozen backbone</strong></td>
+    <td>New head only (~500K params)</td>
+    <td>1e-3</td>
+    <td>Small dataset (&lt;5K images), similar domain to ImageNet</td>
+  </tr>
+  <tr>
+    <td><strong>Full fine-tune</strong></td>
+    <td>All 11M params</td>
+    <td>1e-4 (10× lower)</td>
+    <td>Medium dataset, task differs from ImageNet, want max accuracy</td>
+  </tr>
+  <tr>
+    <td><strong>From scratch</strong></td>
+    <td>All 11M params (random init)</td>
+    <td>1e-3</td>
+    <td>Very large dataset (&gt;1M images), very different domain (medical, satellite)</td>
+  </tr>
+</table>
+<p>The 10× lower LR for full fine-tuning is critical. The backbone is already near a good solution; a normal learning rate would overshoot and destroy the learned representations in the first few steps.</p>
+</section>
+
+<section>
+<h2>05 · ResNet Input Size</h2>
+<pre><code># CIFAR-10 images are 32×32.
+# ResNet's first conv layer uses a 7×7 kernel with stride=2.
+# After first conv: 32 → 16. After first max-pool (stride=2): 16 → 8.
+# By the final residual block, spatial dims are 1×1 — too small for the
+# average-pool that follows. ResNet needs at least 224×224 input.
+
+transform = transforms.Compose([
+    transforms.Resize(224),     # upscale 32×32 → 224×224
+    transforms.ToTensor(),
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+])</code></pre>
+<div class="callout">
+  Upsizing 32×32 → 224×224 adds no real information (the image is blurry at 224), but it satisfies ResNet's spatial requirements. In practice, you'd use a dataset of naturally large images (≥224) — CIFAR-10 is used here for speed.
+</div>
+</section>
+
+<section>
+<h2>06 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_26&gt; python main.py</span><br><br>
+  MODULE 26 — Transfer Learning (ResNet-18 on CIFAR-10)<br>
+  ======================================================<br>
+  Device: cpu<br>
+  Downloading ResNet weights (~45 MB on first run)...<br>
+  <br>
+  ────────────────────────────────────────────────────<br>
+  Experiment: Frozen backbone<br>
+  &nbsp;&nbsp;Total&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 11,177,538<br>
+  &nbsp;&nbsp;Frozen&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 11,048,448&nbsp; (backbone — not updated)<br>
+  &nbsp;&nbsp;Trainable&nbsp;&nbsp;:&nbsp;&nbsp;&nbsp;&nbsp;129,090&nbsp; (new head — updated each step)<br>
+  &nbsp;&nbsp;Ratio&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 1.2% of parameters are trained<br>
+  ────────────────────────────────────────────────────<br>
+  &nbsp;Epoch &nbsp;&nbsp; Tr Loss&nbsp;&nbsp; Tr Acc&nbsp;&nbsp; Va Loss &nbsp;&nbsp; Va Acc<br>
+  ────────────────────────────────────────────────────<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;1 &nbsp;&nbsp; 0.4812 &nbsp;&nbsp; 0.8354 &nbsp;&nbsp; 0.3891 &nbsp;&nbsp; 0.8664<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5 &nbsp;&nbsp; 0.3101 &nbsp;&nbsp; 0.8921 &nbsp;&nbsp; 0.3412 &nbsp;&nbsp; 0.8831<br>
+  <br>
+  Experiment: Full fine-tune<br>
+  &nbsp;&nbsp;Trainable  : 11,177,538 (100%)<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5 &nbsp;&nbsp; 0.2788 &nbsp;&nbsp; 0.9023 &nbsp;&nbsp; 0.3098 &nbsp;&nbsp; 0.8972<br>
+  <br>
+  Experiment: From scratch<br>
+  &nbsp;&nbsp;Trainable  : 11,177,538 (100%)<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5 &nbsp;&nbsp; 0.9431 &nbsp;&nbsp; 0.6674 &nbsp;&nbsp; 0.8512 &nbsp;&nbsp; 0.7001<br>
+  <br>
+  Final test accuracy summary:<br>
+  &nbsp;&nbsp;Frozen backbone &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 88.31%<br>
+  &nbsp;&nbsp;Full fine-tune &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 89.72%<br>
+  &nbsp;&nbsp;From scratch&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 70.01%<br>
+  <br>
+  Saved → plots/transfer_comparison.png<br>
+  Done.
+</div>
+</section>
+
+<section>
+<h2>07 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The "frozen backbone" experiment trains only 1.2% of the model's parameters yet reaches 88% accuracy. The "from scratch" experiment trains 100% of parameters yet only reaches 70% after 5 epochs.</p>
+  <p>Why does training fewer parameters lead to better results here? What would happen if you ran "from scratch" for 50 epochs instead of 5?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> With frozen pretraining, the 98.8% of frozen parameters already encode powerful generic image features (edges, textures, object parts) built from 1.28 million labelled images. The tiny trainable head just needs to learn which of those 512 features predict each CIFAR class — a much easier optimisation problem. "From scratch" must learn all 11M parameters from 50,000 CIFAR images — heavily underdetermined. Running from-scratch for 50 epochs would likely reach 85–90%, but with much higher variance and risk of overfitting. Transfer learning is not just faster — it also requires much less data.
+</div>
+</section>
+
+<section>
+<h2>08 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: How do I use my own folder of images instead of CIFAR-10?</div>
+  <div class="qa-a">Use <code>torchvision.datasets.ImageFolder</code>. Organise your images as:<br>
+  <code>data/train/cat/img1.jpg</code>, <code>data/train/dog/img2.jpg</code>, etc.<br>
+  Then: <code>dataset = ImageFolder("data/train", transform=val_transform)</code><br>
+  The folder names become class labels automatically. The same DataLoader, model, and training loop work unchanged.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Why does full fine-tuning use a 10× lower learning rate?</div>
+  <div class="qa-a">The pre-trained backbone weights are already near a good local minimum of the loss landscape. A normal learning rate (1e-3) would overshoot this minimum and land somewhere worse on the first update. Using 1e-4 takes tiny steps that move the backbone only slightly — "nudging" rather than "jumping." If full fine-tuning with lr=1e-3 doesn't outperform the frozen baseline, the learning rate is the first thing to lower.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What if my task is very different from ImageNet (e.g. X-ray classification)?</div>
+  <div class="qa-a">Transfer still works, just less dramatically. Early conv layers (edges, gradients) transfer well to any image domain. Middle layers (textures, patterns) transfer reasonably. Deep layers (faces, cars, dogs) are ImageNet-specific and may need more fine-tuning. The practical approach: start frozen, measure accuracy, then progressively unfreeze later layers if accuracy is insufficient. Models pretrained on medical image datasets (e.g. CheXNet) would transfer better to X-rays than ImageNet-pretrained ResNet.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is ResNet's "residual" connection, and why does it matter for transfer?</div>
+  <div class="qa-a">Each ResNet "block" computes <code>output = F(x) + x</code> — the block output is the learned transformation PLUS the original input (a skip connection). This prevents vanishing gradients in deep networks and means each block only needs to learn the <em>residual</em> (what's missing) rather than the full transformation. For transfer learning, skip connections mean that even if the new head's gradients are small, they flow back through the identity path — the backbone doesn't "forget" its pretraining catastrophically.</div>
+</div>
+</section>
+
+<section>
+<h2>09 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 27 — RNNs &amp; LSTMs</strong><br>
+  All modules so far have processed fixed-size inputs. RNNs handle <em>sequences</em> — text, time series, audio. You'll build a character-level RNN from scratch, then replace it with PyTorch's nn.LSTM to classify movie review sentiment. The core idea: hidden state carries memory of what the network has seen so far.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_25/tutorial.html">← Module 25: BatchNorm &amp; Dropout</a>
+  <a href="../module_27/tutorial.html">Module 27: RNNs &amp; LSTMs →</a>
+</div>
+
+</body>
+</html>
