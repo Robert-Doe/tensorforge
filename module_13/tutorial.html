@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 13 — k-Means Clustering</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .step-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin:1rem 0}
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.8rem;text-align:center}
+  .step .num{font-size:1.6rem;font-weight:700;color:var(--accent)}
+  .step .label{font-size:.8rem;color:var(--muted);margin-top:.3rem}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Modules 01-03 (NumPy, broadcasting). No sklearn needed — this is from scratch.</p>
+  <p><strong>Key shift:</strong> This is the first <em>unsupervised</em> module. There are no labels in the training loop.</p>
+</div>
+</section>
+
+<h1>Module 13 — k-Means Clustering</h1>
+<h2>Finding case patterns without being told what to look for</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Detective Ada has 120 case files stacked on her desk. No one has labelled them "solved" or "unsolved" — she just has the raw evidence scores, suspect ages, and witness counts.</p>
+<p>She notices some files feel similar to each other — similar crime severity, similar days open, similar evidence. She starts grouping them instinctively into <strong>piles</strong>. Once a pile has a few files, she puts a sticky note in the middle (the <strong>centroid</strong>). Then she re-sorts every file to whichever sticky note it's closest to. The sticky notes move. She re-sorts again. Repeat until nothing moves.</p>
+<p>That's <strong>k-Means</strong>.</p>
+
+<div class="step-flow">
+  <div class="step"><div class="num">1</div><div class="label">Place k random sticky notes (centroids)</div></div>
+  <div class="step"><div class="num">2</div><div class="label">Assign each file to nearest centroid</div></div>
+  <div class="step"><div class="num">3</div><div class="label">Move centroid to mean of its pile</div></div>
+  <div class="step"><div class="num">4</div><div class="label">Repeat until centroids stop moving</div></div>
+</div>
+</section>
+
+<section>
+<h2>02 · The Algorithm, Step by Step</h2>
+<pre><code># Step 1: random initialisation
+init_idx   = rng.choice(len(X), size=k, replace=False)
+centroids  = X[init_idx].copy()   # k random rows from data
+
+for iteration in range(MAX_ITERATIONS):
+    # Step 2: assign — which centroid is each point closest to?
+    diff      = X[:, np.newaxis, :] - centroids[np.newaxis, :, :]
+    distances = np.sqrt((diff ** 2).sum(axis=2))   # (n_samples, k)
+    labels    = np.argmin(distances, axis=1)        # (n_samples,)
+
+    # Step 3: update — move centroids to the mean of their members
+    for c in range(k):
+        centroids[c] = X[labels == c].mean(axis=0)
+
+    # Step 4: stop if centroids barely moved
+    if centroid_shift < TOLERANCE:
+        break</code></pre>
+</section>
+
+<section>
+<h2>03 · Inertia and the Elbow Method</h2>
+<p><strong>Inertia</strong> = sum of squared distances from each point to its assigned centroid. Lower = tighter clusters.</p>
+<p>Problem: inertia always decreases as k increases. At k=n (one cluster per point), inertia=0. So you can't just minimise inertia to pick k.</p>
+<p>Solution: plot inertia vs k and find the <strong>elbow</strong> — the point where adding one more cluster gives sharply diminishing returns.</p>
+
+<pre><code>for k in range(2, 11):
+    km = KMeans(k=k)
+    km.fit(X)
+    print(f"k={k}  inertia={km.inertia_:.2f}")</code></pre>
+
+<div class="callout warn">
+  <strong>The elbow is not always obvious.</strong> On real-world data it often looks like a gentle curve with no sharp bend. In those cases, domain knowledge (or other metrics like silhouette score) should guide your choice of k.
+</div>
+</section>
+
+<section>
+<h2>04 · Supervised vs Unsupervised</h2>
+<table>
+  <tr><th></th><th>Supervised (M04-M12)</th><th>Unsupervised (M13-M14)</th></tr>
+  <tr><td><strong>Labels at training time</strong></td><td>Yes — the model learns from y</td><td>No — the model sees X only</td></tr>
+  <tr><td><strong>Goal</strong></td><td>Predict the correct label for new data</td><td>Find structure / groups in the data</td></tr>
+  <tr><td><strong>Evaluation</strong></td><td>Accuracy, F1, AUC</td><td>Inertia, purity, silhouette score</td></tr>
+  <tr><td><strong>Ground truth needed?</strong></td><td>Yes, to train</td><td>No — but helps to evaluate</td></tr>
+</table>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_13&gt; python main.py</span><br><br>
+MODULE 13 — k-Means Clustering from Scratch<br>
+====================================================<br>
+Data: 120 cases, 6 features (no labels used)<br>
+<br>
+=== Elbow Sweep k=2..10 ===<br>
+&nbsp;&nbsp;k= 2  inertia=  8241.33  iters=7<br>
+&nbsp;&nbsp;k= 3  inertia=  5102.18  iters=9<br>
+&nbsp;&nbsp;k= 4  inertia=  3891.44  iters=11<br>
+&nbsp;&nbsp;k= 5  inertia=  3102.77  iters=14<br>
+&nbsp;&nbsp;...<br>
+<br>
+=== k=3 Detailed Analysis ===<br>
+Converged in 9 iterations<br>
+Final inertia: 5102.18<br>
+<br>
+Cluster composition (true label breakdown):<br>
+&nbsp;&nbsp;Cluster 0:  41 cases — 28 solved, 13 unsolved<br>
+&nbsp;&nbsp;Cluster 1:  38 cases —  9 solved, 29 unsolved<br>
+&nbsp;&nbsp;Cluster 2:  41 cases — 25 solved, 16 unsolved<br>
+<br>
+Cluster purity (vs. true labels): 0.683<br>
+&nbsp;&nbsp;(1.0 = perfect separation, 0.5 = random)<br>
+<br>
+Saved → plots/kmeans_elbow.png<br>
+Saved → plots/kmeans_clusters.png
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>Cluster purity is 0.683, but our best supervised model (Gradient Boosting) hit ~0.775 accuracy. Why is the unsupervised result lower?</p>
+  <p>Does that mean k-Means is worse? Or are they solving different problems?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> They're solving different problems. Gradient Boosting was explicitly trained to predict the "solved" label. k-Means has never seen the labels — it's grouping cases by overall feature similarity, not by solved/unsolved. The fact that it achieves 68% purity <em>without any labels</em> is actually impressive — it means the feature patterns genuinely differ between solved and unsolved cases. Unsupervised methods are most valuable when labels don't exist or are expensive to collect.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Why does k-Means require feature scaling?</div>
+  <div class="qa-a">k-Means uses Euclidean distance. A feature with values 0-365 (days_open) will dominate the distance calculation over a feature with values 0-10 (evidence_score). Scale all features to the same range (e.g., with StandardScaler) so each feature gets an equal vote in the distance.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is k-means++ and why didn't we use it?</div>
+  <div class="qa-a">k-means++ initialises centroids by choosing each subsequent centroid with probability proportional to its distance from the nearest already-chosen centroid. This spreads centroids out, dramatically reducing the chance of poor local minima. sklearn's KMeans uses k-means++ by default (init='k-means++'). We used random init here to see the base algorithm clearly.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Can k-Means handle non-spherical clusters?</div>
+  <div class="qa-a">No. k-Means assumes clusters are roughly spherical and equally sized. Clusters that are elongated, crescent-shaped, or very different in density will confuse it. For those shapes, use DBSCAN (density-based) or Gaussian Mixture Models.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What's the silhouette score?</div>
+  <div class="qa-a">A per-sample measure: how similar a point is to its own cluster vs. the nearest other cluster. Ranges from -1 (wrong cluster) to +1 (perfect fit). The average across all samples gives a single quality metric. sklearn: from sklearn.metrics import silhouette_score.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 14 — PCA from Scratch</strong><br>
+  k-Means clusters in the original feature space. But what if you have 100 features and want to visualise them? PCA finds the directions of maximum variance in the data and projects everything onto a lower-dimensional space — turning 100 features into 2 you can actually plot.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_12/tutorial.html">← Module 12: Random Forests</a>
+  <a href="../module_14/tutorial.html">Module 14: PCA →</a>
+</div>
+
+</body>
+</html>
