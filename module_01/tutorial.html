@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 01 — NumPy: The Detective's Data Toolkit</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#f0883e;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.7;padding:2rem}
+  h1{color:var(--accent);font-size:2rem;margin-bottom:.4rem}
+  h2{color:var(--green);font-size:1.3rem;margin:2rem 0 .8rem;border-left:3px solid var(--green);padding-left:.8rem}
+  h3{color:var(--orange);font-size:1.1rem;margin:1.2rem 0 .4rem}
+  p,li{color:var(--text);margin-bottom:.6rem}
+  ul{padding-left:1.5rem}
+  code{background:var(--panel);padding:.15rem .4rem;border-radius:4px;font-family:'Fira Code',monospace;font-size:.88em;color:var(--accent)}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  pre code{background:none;padding:0;color:var(--text)}
+  .badge{display:inline-block;background:var(--accent);color:#000;font-size:.75rem;padding:.2rem .6rem;border-radius:12px;font-weight:700;margin-right:.4rem}
+  .warn{background:#2d1c1c;border-left:4px solid var(--red);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .tip{background:#1c2d1c;border-left:4px solid var(--green);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem}
+  .card h3{margin-top:0}
+  .qa{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.8rem 0}
+  .qa .q{color:var(--orange);font-weight:600}
+  .qa .a{color:var(--muted);margin-top:.4rem}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--panel);color:var(--accent);padding:.6rem 1rem;text-align:left;border:1px solid var(--border)}
+  td{padding:.5rem 1rem;border:1px solid var(--border);color:var(--text)}
+  .breadcrumb{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem}
+</style>
+</head>
+<body>
+<div class="breadcrumb">Detective Agency ML Curriculum › Module 01</div>
+<h1>Module 01 — NumPy: The Detective's Data Toolkit</h1>
+<p><span class="badge">Beginner</span> The raw engine under every ML calculation. Before models, before plots — just fast arrays.</p>
+
+<h2>00 — Why NumPy?</h2>
+<p>Python lists are flexible but slow: each element is a Python object with overhead. NumPy arrays store raw C-level numbers in contiguous memory — operations run at CPU speed, not Python speed.</p>
+<div class="grid">
+  <div class="card"><h3>Python list</h3><pre><code>result = []
+for x in data:
+    result.append(x * 2)  # slow Python loop</code></pre></div>
+  <div class="card"><h3>NumPy array</h3><pre><code>result = data * 2  # vectorised — no loop
+                   # ~100× faster on 1M elements</code></pre></div>
+</div>
+
+<h2>01 — Creating Arrays</h2>
+<pre><code>import numpy as np
+
+# From a Python list
+a = np.array([3, 7, 2, 9, 4])      # 1-D array
+
+# 2-D array (matrix): rows × columns
+M = np.array([[10, 5, 3],
+              [ 7, 8, 2],
+              [ 4, 2, 9]])          # shape (3, 3)
+
+# Constructors
+np.zeros(5)                         # [0. 0. 0. 0. 0.]
+np.ones((2, 3))                     # 2×3 matrix of ones
+np.arange(0, 10, 2)                 # [0 2 4 6 8]
+np.linspace(0, 1, 5)                # [0.  0.25  0.5  0.75  1.]
+np.eye(3)                           # 3×3 identity matrix</code></pre>
+
+<h2>02 — Shape, dtype, ndim</h2>
+<pre><code>a = np.array([1, 2, 3, 4, 5, 6]).reshape(2, 3)
+print(a.shape)    # (2, 3)
+print(a.ndim)     # 2
+print(a.dtype)    # int64 (or int32 on Windows)
+print(a.size)     # 6  (total elements)</code></pre>
+<div class="tip"><strong>Tip:</strong> Always check <code>.shape</code> when debugging matrix operations. Most errors come from mismatched shapes.</div>
+
+<h2>03 — Indexing and Slicing</h2>
+<pre><code>cases = np.array([3, 7, 2, 9, 4, 6, 1])
+
+cases[0]          # 3     (first element)
+cases[-1]         # 1     (last element)
+cases[2:5]        # [2 9 4]
+cases[::2]        # [3 2 4 1]  (every other)
+
+# 2-D: [row, col]
+M[1, :]           # second row: [7 8 2]
+M[:, 2]           # third column: [3 2 9]
+M[0:2, 1]         # rows 0-1, col 1: [5 8]
+
+# Boolean indexing
+cases[cases > 5]  # [7 9 6]  — only high-crime days</code></pre>
+
+<h2>04 — Vectorised Operations</h2>
+<p>NumPy applies every operator element-wise — no Python <code>for</code> loop needed:</p>
+<pre><code>solved   = np.array([2, 5, 1, 7, 3, 4, 1])
+unsolved = cases - solved          # element-wise subtraction
+rate     = solved / cases          # element-wise division
+
+# Aggregations (over entire array, or per axis)
+cases.sum()                        # total
+cases.mean()                       # average
+cases.max()                        # maximum value
+cases.argmax()                     # INDEX of maximum
+cases.std()                        # standard deviation
+np.percentile(cases, 75)           # 75th percentile</code></pre>
+
+<h2>05 — Broadcasting</h2>
+<p>Broadcasting lets NumPy operate on arrays of different shapes without copies:</p>
+<pre><code># Apply weights to each column of a (3, 3) matrix
+weights = np.array([1.0, 1.5, 2.0])   # shape (3,)
+weighted = M * weights                  # (3,3) × (3,) → broadcasts
+
+# Rule: compare shapes right-to-left; size 1 stretches
+# (3, 3) vs (3,) → OK: (3,3) vs (1,3) → each row gets same weights</code></pre>
+<div class="warn"><strong>Common error:</strong> Shapes <code>(3,)</code> and <code>(3, 1)</code> look similar but broadcast differently. Always check which axis you're operating along.</div>
+
+<h2>06 — Useful Functions Quick Reference</h2>
+<table>
+  <tr><th>Function</th><th>What it does</th></tr>
+  <tr><td><code>np.sort(a)</code></td><td>Sorted copy of array</td></tr>
+  <tr><td><code>np.argsort(a)</code></td><td>Indices that would sort array</td></tr>
+  <tr><td><code>np.unique(a)</code></td><td>Unique values</td></tr>
+  <tr><td><code>np.where(cond, a, b)</code></td><td>Element-wise if/else</td></tr>
+  <tr><td><code>np.concatenate([a,b])</code></td><td>Join arrays</td></tr>
+  <tr><td><code>np.dot(A, B)</code></td><td>Matrix multiplication</td></tr>
+  <tr><td><code>np.linalg.norm(v)</code></td><td>Vector length</td></tr>
+  <tr><td><code>np.random.default_rng(42)</code></td><td>Reproducible random generator</td></tr>
+</table>
+
+<h2>07 — Q&amp;A Brain Check</h2>
+<div class="qa"><div class="q">Q: What is the shape of <code>np.zeros((2, 3, 4))</code>?</div>
+<div class="a">A: (2, 3, 4) — a 3-D array with 2 planes, 3 rows, 4 columns. Total 24 elements.</div></div>
+<div class="qa"><div class="q">Q: What's the difference between <code>a[1]</code> and <code>a[1:2]</code> for a 1-D array?</div>
+<div class="a">A: <code>a[1]</code> returns a scalar. <code>a[1:2]</code> returns a 1-element array — different shape. Slicing always returns an array; indexing may return a scalar.</div></div>
+<div class="qa"><div class="q">Q: Why does <code>a * 2</code> not modify <code>a</code> in place?</div>
+<div class="a">A: NumPy operators return NEW arrays. To modify in place, use <code>a *= 2</code> or <code>np.multiply(a, 2, out=a)</code>.</div></div>
+<div class="qa"><div class="q">Q: When would you use <code>linspace</code> vs <code>arange</code>?</div>
+<div class="a">A: Use <code>linspace(start, stop, n)</code> when you want exactly <code>n</code> evenly-spaced points between start and stop (inclusive). Use <code>arange(start, stop, step)</code> when you know the step size.</div></div>
+
+<h2>08 — What's Next</h2>
+<ul>
+  <li><strong>Module 02:</strong> Pandas — labeled 2-D tables built on NumPy arrays</li>
+  <li><strong>numpy_advanced.py:</strong> einsum, structured arrays, memory layout, broadcasting rules</li>
+</ul>
+</body>
+</html>
