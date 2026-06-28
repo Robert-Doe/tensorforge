@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 20 — Training Loops & Mini-Batches</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;margin:1rem 0}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;text-align:center}
+  .card .big{font-size:1.6rem;font-weight:700;color:var(--accent)}
+  .card .label{font-size:.8rem;color:var(--muted);margin-top:.3rem}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 18 (MLP from scratch). The MiniBatchTrainer wraps the M18 MLP — make sure that module runs correctly first.</p>
+  <p><strong>Key idea:</strong> Mini-batch SGD = gradient descent where each step uses a random <em>subset</em> of the data, not all of it. Faster per step, noisier gradient, but often finds better solutions.</p>
+</div>
+</section>
+
+<h1>Module 20 — Training Loops &amp; Mini-Batches</h1>
+<h2>Don't review all 10,000 case files before every decision</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Ada needs to improve her case-solving strategy. Full-batch GD says: "Read all 10,000 case files, compute the average lesson, update your strategy once." That takes all day for one update.</p>
+<p>Mini-batch SGD says: "Grab 32 random case files. Read those. Update your strategy. Grab 32 more. Update again." Each update is noisier — 32 cases don't perfectly represent all 10,000 — but you get thousands of updates per day instead of one.</p>
+<p>The noise isn't just a cost. It's also a benefit: the randomness helps Ada escape local habits (local minima) that full-batch review might reinforce.</p>
+
+<div class="grid-3">
+  <div class="card"><div class="big">1</div><div class="label">Full-batch update per epoch<br>(slow, precise)</div></div>
+  <div class="card"><div class="big" style="color:var(--green)">~3</div><div class="label">Mini-batch updates per epoch<br>(fast, noisy)</div></div>
+  <div class="card"><div class="big" style="color:var(--yellow)">300</div><div class="label">Total steps after 100 epochs<br>(mini-batch)</div></div>
+</div>
+</section>
+
+<section>
+<h2>02 · The Training Loop Anatomy</h2>
+<pre><code>for epoch in range(EPOCHS):
+    # shuffle the training data every epoch
+    idx    = rng.permutation(len(X))
+    X_shuf = X[idx]
+    y_shuf = y[idx]
+
+    batch_losses = []
+    for start in range(0, len(X), BATCH_SIZE):
+        X_batch = X_shuf[start : start + BATCH_SIZE]   # 32 samples
+        y_batch = y_shuf[start : start + BATCH_SIZE]
+
+        # forward → loss → backward → update
+        probs = model.forward(X_batch)
+        loss  = loss_fn(probs, y_batch)
+        model.backward(probs, y_batch)
+        model.update_weights()
+        batch_losses.append(loss)
+
+    epoch_loss = np.mean(batch_losses)   # average over all batches
+
+    # validation — no weight update, just measure
+    val_probs = model.forward(X_val)
+    val_loss  = loss_fn(val_probs, y_val)</code></pre>
+</section>
+
+<section>
+<h2>03 · Three-Way Data Split</h2>
+<table>
+  <tr><th>Split</th><th>Purpose</th><th>Used for weight updates?</th></tr>
+  <tr><td><strong>Training</strong></td><td>Model learns from this data</td><td>Yes</td></tr>
+  <tr><td><strong>Validation</strong></td><td>Tune hyperparameters, detect overfitting</td><td>No — measure only</td></tr>
+  <tr><td><strong>Test</strong></td><td>Final unbiased performance estimate</td><td>No — look once at the end</td></tr>
+</table>
+<div class="callout warn">
+  <strong>Never use test loss to decide when to stop training.</strong> That would make the test set part of the training process and inflate your reported accuracy. The validation set is the correct early-stopping signal. The test set is untouched until you're done.
+</div>
+</section>
+
+<section>
+<h2>04 · Batch Size Trade-offs</h2>
+<table>
+  <tr><th>Batch size</th><th>Gradient quality</th><th>Memory use</th><th>Typical use</th></tr>
+  <tr><td>1 (online SGD)</td><td>Very noisy</td><td>Tiny</td><td>Rarely used in DL</td></tr>
+  <tr><td>32–128</td><td>Good balance</td><td>Moderate</td><td>Default for most tasks</td></tr>
+  <tr><td>512–4096</td><td>More accurate gradient</td><td>High (needs GPU)</td><td>Large-scale training</td></tr>
+  <tr><td>All samples</td><td>Exact gradient</td><td>Full dataset in RAM</td><td>Only feasible for tiny datasets</td></tr>
+</table>
+<div class="callout">
+  <strong>Rule of thumb:</strong> Start with batch_size=32. If training is slow, double it. If the model doesn't converge, halve it. Scale learning rate proportionally (linear scaling rule: lr = base_lr × batch_size / 32).
+</div>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_20&gt; python main.py</span><br><br>
+MODULE 20 — Training Loops &amp; Mini-Batches<br>
+====================================================<br>
+Train: 78  Val: 18  Test: 24<br>
+<br>
+--- Full-batch GD (all samples at once) ---<br>
+&nbsp;&nbsp;Epoch  20/100  train_loss=0.6231  val_loss=0.6418<br>
+&nbsp;&nbsp;Epoch  40/100  train_loss=0.5802  val_loss=0.6091<br>
+&nbsp;&nbsp;Epoch  60/100  train_loss=0.5513  val_loss=0.5841<br>
+&nbsp;&nbsp;Epoch  80/100  train_loss=0.5291  val_loss=0.5712<br>
+&nbsp;&nbsp;Epoch 100/100  train_loss=0.5122  val_loss=0.5641<br>
+Test accuracy (full-batch) : 0.750<br>
+<br>
+--- Mini-batch SGD (batch_size=32) ---<br>
+&nbsp;&nbsp;Epoch  20/100  train_loss=0.5914  val_loss=0.6102<br>
+&nbsp;&nbsp;Epoch  40/100  train_loss=0.5441  val_loss=0.5773<br>
+&nbsp;&nbsp;Epoch  60/100  train_loss=0.5198  val_loss=0.5591<br>
+&nbsp;&nbsp;Epoch  80/100  train_loss=0.5011  val_loss=0.5480<br>
+&nbsp;&nbsp;Epoch 100/100  train_loss=0.4887  val_loss=0.5423<br>
+Test accuracy (mini-batch) : 0.750<br>
+<br>
+Steps taken:<br>
+&nbsp;&nbsp;Full-batch: 100 updates (1 per epoch)<br>
+&nbsp;&nbsp;Mini-batch: 300 updates (3 per epoch)<br>
+<br>
+Saved → plots/minibatch_loss.png<br>
+Saved → plots/step_loss.png
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>Look at the step_loss.png plot — the per-batch losses zigzag wildly compared to the smooth epoch-level curve. Is that noise a problem or a feature?</p>
+  <p>And: if you kept halving the batch size (32 → 16 → 8 → 1), what would happen to the loss curve and to training time?</p>
+</div>
+<div class="callout">
+  <strong>Noise as feature:</strong> The noise helps escape sharp local minima — a sharp minimum has high curvature, so a noisy step can hop over it to a flatter (and often more generalisable) minimum. This is one reason SGD often outperforms full-batch GD on generalisation, even if it has a higher final training loss.<br><br>
+  <strong>Smaller batches:</strong> The loss curve becomes increasingly jagged. Training time per epoch may decrease (fewer RAM operations) or increase (Python loop overhead dominates). At batch_size=1 the gradient is maximally noisy and the network may never converge — you'd need a much lower learning rate.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: What is an "epoch" vs a "step"?</div>
+  <div class="qa-a">An epoch is one complete pass through the training data. A step (or iteration) is one weight update using one mini-batch. If you have 1000 samples and batch_size=32, each epoch has ceil(1000/32) = 32 steps. After 10 epochs you've completed 320 steps.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Why shuffle the data every epoch?</div>
+  <div class="qa-a">Without shuffling, the model sees the same batch order every epoch. If the data is sorted (e.g., all solved cases first), each epoch's gradients are systematically biased — early batches push weights one way, late batches push them another. Shuffling ensures each batch is a random sample from the full distribution.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is early stopping?</div>
+  <div class="qa-a">Monitor validation loss during training. When val_loss stops improving (or starts rising), stop training — the model is beginning to overfit. In practice, you wait a few epochs to confirm the trend isn't a fluctuation, then restore the weights from the epoch with the best val_loss. PyTorch-Lightning and Keras have built-in EarlyStopping callbacks for this.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 21 — Overfitting &amp; Regularisation</strong><br>
+  The training loss falls; the validation loss rises. The model is memorising training cases instead of learning general patterns. Module 21 adds two classic cures: L2 weight decay (penalise large weights) and Dropout (randomly silence neurons during training). Both are implemented from scratch inside the NumPy MLP.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_19/tutorial.html">← Module 19: Activation Functions</a>
+  <a href="../module_21/tutorial.html">Module 21: Regularisation →</a>
+</div>
+
+</body>
+</html>
