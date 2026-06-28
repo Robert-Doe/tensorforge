@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 17 — Backpropagation</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .flow{display:flex;align-items:center;gap:.4rem;margin:1rem 0;flex-wrap:wrap}
+  .fbox{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.6rem 1rem;font-size:.85rem;text-align:center}
+  .arrow{color:var(--muted);font-size:1.3rem}
+  .arrow.back{color:var(--red)}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 16 (one neuron, forward pass, gradients). You need to understand: z = X@w+b, a = sigmoid(z), dL/dw = X.T @ (a-y) / n.</p>
+  <p><strong>New concept:</strong> The <strong>chain rule</strong> — how to differentiate a composition of functions. If L = f(g(h(x))), then dL/dx = f'(g(h)) · g'(h) · h'(x).</p>
+</div>
+</section>
+
+<h1>Module 17 — Backpropagation</h1>
+<h2>How does the last layer's mistake teach the first layer?</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Ada's detective agency has three departments: <strong>Evidence Collection</strong> (input layer), <strong>Analysis</strong> (hidden layer), and <strong>Final Verdict</strong> (output layer). The verdict turns out to be wrong.</p>
+<p>The Chief calls in the Verdict department: "Your confidence score was 0.8 but the answer was 0 — you were 0.8 off." The Verdict team blames the Analysis team proportionally: "You gave me signals A and B. A was more influential — you owe 60% of the blame." The Analysis team then blames Evidence Collection proportionally.</p>
+<p>Blame flows <strong>backward</strong> through the organisation, proportional to each department's contribution to the error. Each department adjusts its own procedures (weights) based on its share of the blame. That's <strong>backpropagation</strong>.</p>
+
+<div class="flow">
+  <div class="fbox" style="border-color:var(--accent)">Input X</div>
+  <div class="arrow">→</div>
+  <div class="fbox">W1, b1<br><small>hidden</small></div>
+  <div class="arrow">→</div>
+  <div class="fbox">ReLU</div>
+  <div class="arrow">→</div>
+  <div class="fbox">W2, b2<br><small>output</small></div>
+  <div class="arrow">→</div>
+  <div class="fbox" style="border-color:var(--green)">ŷ (prob)</div>
+  <div class="arrow">→</div>
+  <div class="fbox" style="border-color:var(--red)">Loss</div>
+</div>
+<div class="flow" style="justify-content:flex-end">
+  <div class="fbox" style="border-color:var(--red)">dL/dW1</div>
+  <div class="arrow back">←</div>
+  <div class="fbox">dL/dZ1</div>
+  <div class="arrow back">←</div>
+  <div class="fbox">dL/dA1</div>
+  <div class="arrow back">←</div>
+  <div class="fbox">dL/dW2</div>
+  <div class="arrow back">←</div>
+  <div class="fbox" style="border-color:var(--red)">dL/dZ2</div>
+</div>
+</section>
+
+<section>
+<h2>02 · The Chain Rule</h2>
+<p>If L depends on Z2, and Z2 depends on W2, then:</p>
+<pre><code>dL/dW2 = dL/dZ2 · dZ2/dW2
+       = (A2 - y) · A1         # output error × hidden activation</code></pre>
+
+<p>To get the gradient for the <em>hidden</em> layer weights, you go one step further back:</p>
+<pre><code>dL/dW1 = dL/dZ2 · dZ2/dA1 · dA1/dZ1 · dZ1/dW1
+       = (A2-y) ·     W2.T  ·  relu'(Z1) ·   X</code></pre>
+
+<p>Each "·" is a link in the chain. The further a layer is from the output, the more multiplications its gradient passes through.</p>
+</section>
+
+<section>
+<h2>03 · Forward Then Backward</h2>
+<pre><code># ── FORWARD ──────────────────────────────────────────────────────
+Z1 = X  @ W1 + b1       # (n, H) — hidden pre-activation
+A1 = relu(Z1)            # (n, H) — hidden output (SAVE THIS for backward)
+
+Z2 = A1 @ W2 + b2       # (n, 1) — output pre-activation (SAVE Z1 too)
+A2 = sigmoid(Z2)         # (n, 1) — predicted probability
+
+# ── LOSS ──────────────────────────────────────────────────────────
+loss = -mean(y * log(A2) + (1-y) * log(1-A2))
+
+# ── BACKWARD ──────────────────────────────────────────────────────
+dZ2 = A2 - y             # (n, 1) — output layer error
+dW2 = A1.T @ dZ2  / n   # (H, 1) — output weight gradient
+db2 = dZ2.mean()         # (1,)
+
+dA1 = dZ2 @ W2.T         # (n, H) — error propagated back through W2
+dZ1 = dA1 * relu'(Z1)    # (n, H) — zeroed where ReLU was inactive
+dW1 = X.T  @ dZ1  / n   # (d, H) — hidden weight gradient
+db1 = dZ1.mean(axis=0)   # (H,)
+
+# ── UPDATE ────────────────────────────────────────────────────────
+W2 -= lr * dW2;  b2 -= lr * db2
+W1 -= lr * dW1;  b1 -= lr * db1</code></pre>
+
+<div class="callout warn">
+  <strong>Why save Z1 during the forward pass?</strong> The ReLU derivative (relu'(Z1) = Z1 > 0) needs the pre-activation values. Modern DL frameworks cache all intermediate tensors in memory during the forward pass for exactly this reason — the backward pass reads them in reverse order.
+</div>
+</section>
+
+<section>
+<h2>04 · Weight Initialisation Matters</h2>
+<table>
+  <tr><th>Strategy</th><th>Formula</th><th>Best for</th></tr>
+  <tr><td>Zero init</td><td>w = 0</td><td>Never — all neurons learn identically</td></tr>
+  <tr><td>Xavier / Glorot</td><td>std = √(1/n_in)</td><td>Sigmoid, Tanh layers</td></tr>
+  <tr><td>He / Kaiming</td><td>std = √(2/n_in)</td><td>ReLU layers (compensates for ReLU killing half the signal)</td></tr>
+</table>
+<pre><code># He init for hidden layer (ReLU)
+W1 = rng.normal(0, np.sqrt(2.0 / n_features), (n_features, hidden_size))
+
+# Xavier init for output layer (sigmoid)
+W2 = rng.normal(0, np.sqrt(1.0 / hidden_size), (hidden_size, 1))</code></pre>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_17&gt; python main.py</span><br><br>
+MODULE 17 — Backpropagation<br>
+====================================================<br>
+<br>
+1-layer Neuron (M16)   Test acc: 0.750<br>
+2-layer Net (backprop) Test acc: 0.750<br>
+<br>
+Parameter count:<br>
+&nbsp;&nbsp;1-layer:  7 params  (w + b)<br>
+&nbsp;&nbsp;2-layer: 65 params  (W1,b1,W2,b2)<br>
+<br>
+=== Gradient trace (1 sample, 1 pass) ===<br>
+&nbsp;&nbsp;Input X         : [ 0.312  -0.841   1.203]...<br>
+&nbsp;&nbsp;Hidden Z1 (first 3): [ 0.041   0.118  -0.033]<br>
+&nbsp;&nbsp;Hidden A1 (first 3): [ 0.041   0.118   0.000]<br>
+&nbsp;&nbsp;Output Z2       : 0.2841<br>
+&nbsp;&nbsp;Output A2 (prob): 0.5707  (true label=1)<br>
+&nbsp;&nbsp;dZ2 (error)     : -0.4293<br>
+&nbsp;&nbsp;||dW2||         : 0.0412<br>
+&nbsp;&nbsp;||dW1||         : 0.0073<br>
+&nbsp;&nbsp;Gradient flows back: output → hidden → input<br>
+<br>
+Saved → plots/backprop_loss.png
+</div>
+
+<div class="callout">
+  <strong>||dW1|| &lt; ||dW2||</strong> — the hidden layer's gradient is smaller because it passed through an extra matrix multiplication (W2.T) and the ReLU derivative (which zeroes some gradients). This is a mild version of the vanishing gradient problem — covered fully in M19.
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The 2-layer network has 65 parameters but achieves the same accuracy as the 1-layer (7 parameters). Why doesn't more parameters always mean better accuracy?</p>
+  <p>What would you need to change to make the 2-layer network outperform the 1-layer on this dataset?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> More parameters create more capacity, but capacity only helps if (1) the underlying pattern is complex enough to need it, and (2) you have enough training data to fill that capacity without overfitting. Our dataset has 96 training samples and 6 features — the pattern isn't complex enough to benefit from 65 parameters vs 7. You'd need to either collect more data or move to a more complex problem (like image classification) to see the 2-layer network win.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: What's the difference between backpropagation and gradient descent?</div>
+  <div class="qa-a">Backpropagation computes the gradients (the direction and magnitude to move each weight). Gradient descent uses those gradients to actually update the weights. They work together: backprop is the "figure out which way is downhill" step; gradient descent is the "take a step downhill" step.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Why do we divide gradients by n (batch size)?</div>
+  <div class="qa-a">The loss is averaged over all samples, so the gradient must also be averaged. Without dividing by n, the gradient magnitude would grow with batch size — making the effective learning rate batch-size-dependent. Averaging keeps the gradient scale consistent regardless of how many samples you use.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Do frameworks like PyTorch compute backprop the same way?</div>
+  <div class="qa-a">Conceptually yes — they use the same chain rule. Mechanically, PyTorch uses automatic differentiation (autograd): it records every operation in the forward pass in a computation graph, then traverses the graph in reverse to compute gradients. You never write dZ2 = A2 - y manually. Module 22 shows this.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 18 — Multi-Layer Network from Scratch</strong><br>
+  You've done backprop through 2 layers. Module 18 generalises this to an arbitrary number of layers using a layer abstraction — each layer has its own forward() and backward() method. Then we train the full network on XOR, a problem the single neuron (M16) cannot solve.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_16/tutorial.html">← Module 16: One Neuron</a>
+  <a href="../module_18/tutorial.html">Module 18: Multi-Layer Network →</a>
+</div>
+
+</body>
+</html>
