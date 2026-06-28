@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 19 — Activation Functions</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.red{border-color:var(--red)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border);font-size:.9rem}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .act-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;margin:1rem 0}
+  .act-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
+  .act-card h3{font-size:.95rem;margin-bottom:.3rem}
+  .act-card .range{font-size:.8rem;color:var(--muted)}
+  .act-card .good{color:var(--green);font-size:.8rem}
+  .act-card .bad{color:var(--red);font-size:.8rem}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 17 (backpropagation, chain rule). You need to understand why the gradient must flow backward through each layer and what happens when it shrinks.</p>
+  <p><strong>No data loading this module</strong> — we're studying mathematical functions.</p>
+</div>
+</section>
+
+<h1>Module 19 — Activation Functions</h1>
+<h2>Choosing the right decision gate for your detective neurons</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Each neuron is a detective informant. After computing a weighted sum of evidence (z), the informant must decide how much to "shout" their signal to the next layer. The <strong>activation function</strong> is the informant's personality:</p>
+<ul style="margin-left:1.5rem;margin-bottom:1rem">
+  <li><strong>Sigmoid</strong>: "I'll give you a number between 0 and 1 — my confidence."</li>
+  <li><strong>ReLU</strong>: "If I'm not confident (z ≤ 0), I shut up completely. Otherwise I shout exactly how confident I am."</li>
+  <li><strong>Leaky ReLU</strong>: "I always whisper at least a little, even when z is negative — so I can still be trained."</li>
+  <li><strong>Tanh</strong>: "Same as sigmoid but I shout in both directions: -1 means strongly wrong, +1 means strongly right."</li>
+</ul>
+<p>The problem: if 10 informants all talk through sigmoid, each one's message is multiplied by at most 0.25 before it reaches the next layer. After 10 layers: 0.25¹⁰ ≈ 0.0000001. The first layer's informants receive almost no feedback and can't learn. That's the <strong>vanishing gradient problem</strong>.</p>
+</section>
+
+<section>
+<h2>02 · Activation Function Comparison</h2>
+
+<div class="act-grid">
+  <div class="act-card">
+    <h3 style="color:#58a6ff">Sigmoid</h3>
+    <div class="range">Output: (0, 1)</div>
+    <pre style="margin:.5rem 0;border:none;background:none;padding:0;font-size:.8rem"><code>1 / (1 + e⁻ᶻ)</code></pre>
+    <div class="good">✓ Probabilistic output</div>
+    <div class="bad">✗ Vanishing gradient (max 0.25)</div>
+    <div class="bad">✗ Not zero-centred</div>
+  </div>
+  <div class="act-card">
+    <h3 style="color:#3fb950">Tanh</h3>
+    <div class="range">Output: (-1, 1)</div>
+    <pre style="margin:.5rem 0;border:none;background:none;padding:0;font-size:.8rem"><code>(eᶻ - e⁻ᶻ) / (eᶻ + e⁻ᶻ)</code></pre>
+    <div class="good">✓ Zero-centred</div>
+    <div class="bad">✗ Still vanishes (max 1.0 but tapers)</div>
+    <div class="bad">✗ Expensive (two exp calls)</div>
+  </div>
+  <div class="act-card">
+    <h3 style="color:#d29922">ReLU</h3>
+    <div class="range">Output: [0, ∞)</div>
+    <pre style="margin:.5rem 0;border:none;background:none;padding:0;font-size:.8rem"><code>max(0, z)</code></pre>
+    <div class="good">✓ No vanishing (gradient = 1)</div>
+    <div class="good">✓ Fast to compute</div>
+    <div class="bad">✗ Dead neurons (z&lt;0 → stuck at 0)</div>
+  </div>
+  <div class="act-card">
+    <h3 style="color:#bc8cff">Leaky ReLU</h3>
+    <div class="range">Output: (-∞, ∞)</div>
+    <pre style="margin:.5rem 0;border:none;background:none;padding:0;font-size:.8rem"><code>z if z>0 else 0.01z</code></pre>
+    <div class="good">✓ No dead neurons</div>
+    <div class="good">✓ Near-zero gradient for z&lt;0</div>
+    <div class="bad">✗ Alpha (0.01) is a hyperparameter</div>
+  </div>
+  <div class="act-card">
+    <h3 style="color:#f85149">ELU</h3>
+    <div class="range">Output: (-α, ∞)</div>
+    <pre style="margin:.5rem 0;border:none;background:none;padding:0;font-size:.8rem"><code>z if z>0 else α(eᶻ-1)</code></pre>
+    <div class="good">✓ Smooth, near-zero mean</div>
+    <div class="good">✓ Better generalisation (research)</div>
+    <div class="bad">✗ Slower (exp for z&lt;0)</div>
+  </div>
+  <div class="act-card">
+    <h3 style="color:#39d353">Rule of thumb</h3>
+    <div class="range" style="margin-bottom:.5rem">Use this decision tree:</div>
+    <div style="font-size:.82rem">
+      Output neuron → <strong>Sigmoid</strong> (binary) or <strong>Softmax</strong> (multi-class)<br>
+      Hidden layers → <strong>ReLU</strong> (default)<br>
+      Dead neurons? → <strong>Leaky ReLU</strong><br>
+      Research/tuning → <strong>ELU</strong> or <strong>GELU</strong>
+    </div>
+  </div>
+</div>
+</section>
+
+<section>
+<h2>03 · The Vanishing Gradient Problem</h2>
+<pre><code># Sigmoid derivative is at most 0.25 (at z=0)
+# After n layers, gradient ≈ 0.25^n
+
+layers = [1, 3, 6, 9, 12]
+print("Layer  Sigmoid gradient")
+for n in layers:
+    print(f"  {n:2d}     {0.25**n:.2e}")
+
+# Output:
+#   1     2.50e-01
+#   3     1.56e-02
+#   6     2.44e-04
+#   9     3.81e-06
+#  12     5.96e-08</code></pre>
+
+<div class="callout red">
+  <strong>After 12 sigmoid layers, the gradient is 5.96 × 10⁻⁸.</strong> The weights in the first layer receive almost zero signal. They can't learn — the network is effectively shallow even though it's deep.
+</div>
+
+<div class="callout">
+  <strong>Why ReLU fixes this:</strong> For active neurons (z > 0), ReLU derivative = 1.0. The gradient passes through unchanged. A 100-layer ReLU network can still have gradient magnitude = 1.0 at the first layer (assuming all neurons are active).
+</div>
+</section>
+
+<section>
+<h2>04 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_19&gt; python main.py</span><br><br>
+MODULE 19 — Activation Functions<br>
+====================================================<br>
+<br>
+=== Maximum Gradient Values ===<br>
+&nbsp;&nbsp;Activation     Max gradient    At z  Problem<br>
+&nbsp;&nbsp;------------------------------------------------------------<br>
+&nbsp;&nbsp;Sigmoid                0.25       0  Vanishes in deep nets (×0.25 per layer)<br>
+&nbsp;&nbsp;Tanh                   1.00       0  Vanishes too, but less severe<br>
+&nbsp;&nbsp;ReLU                   1.00     z>0  Dead neurons (z&lt;0 → gradient=0)<br>
+&nbsp;&nbsp;Leaky ReLU             1.00     z>0  Tiny leak (0.01) for z&lt;0<br>
+&nbsp;&nbsp;ELU                    1.00     z>0  Smooth negative side, near-zero mean<br>
+<br>
+=== Vanishing Gradient through 12 Sigmoid Layers ===<br>
+&nbsp;&nbsp;Layer  0 (output): gradient = 1.000000<br>
+&nbsp;&nbsp;Layer  1         : gradient = 0.25000000<br>
+&nbsp;&nbsp;Layer  3         : gradient = 0.01562500<br>
+&nbsp;&nbsp;Layer  6         : gradient = 0.00024414<br>
+&nbsp;&nbsp;Layer  9         : gradient = 0.00000381<br>
+&nbsp;&nbsp;Layer 12         : gradient = 0.00000006<br>
+<br>
+Saved → plots/activation_comparison.png<br>
+Saved → plots/vanishing_gradient.png
+</div>
+</section>
+
+<section>
+<h2>05 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The "dead neuron" problem in ReLU: a neuron whose pre-activation z is always negative will have gradient=0 forever, so its weights never update and it stays dead.</p>
+  <p>What causes a neuron to get stuck at negative z? And what's the simplest fix?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> A neuron gets stuck when its incoming weights push the pre-activation negative for every training example. This often happens with a bad learning rate (weights overshoot into the negative region) or poor weight initialisation. The simplest fix is Leaky ReLU (alpha=0.01) — a tiny gradient always flows, nudging the weights back even from the dead zone. A higher-tech fix is to use a lower learning rate or add batch normalisation (M25) to keep pre-activations in a healthy range.
+</div>
+</section>
+
+<section>
+<h2>06 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: If ReLU is better than sigmoid for hidden layers, why use sigmoid at all?</div>
+  <div class="qa-a">Sigmoid is used for the <em>output</em> neuron of a binary classifier — you need a number in (0,1) that can be interpreted as a probability. ReLU output is unbounded [0, ∞), which doesn't represent probability. In hidden layers: ReLU. In binary output: sigmoid. In multi-class output: softmax (which generalises sigmoid to multiple classes).</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is GELU and why is it used in transformers?</div>
+  <div class="qa-a">GELU (Gaussian Error Linear Unit) = z × Φ(z) where Φ is the Gaussian CDF. It's a smooth approximation to ReLU that "gates" the input probabilistically. GPT, BERT, and most modern transformers use GELU because it achieves better empirical performance on language tasks — the smooth gate seems to match the distribution of language features better than the sharp ReLU gate.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: How does batch normalisation help with vanishing gradients?</div>
+  <div class="qa-a">Batch normalisation (M25) standardises the pre-activations (Z) to zero mean and unit variance before the activation function is applied. This keeps Z in the "non-saturating" region of sigmoid/tanh where gradients are largest. It effectively solves the vanishing gradient problem for sigmoid/tanh, though ReLU + He init remains the practical default.</div>
+</div>
+</section>
+
+<section>
+<h2>07 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 20 — Training Loops &amp; Mini-Batches</strong><br>
+  Every training loop so far has used all 96 samples at once (full-batch gradient descent). Real datasets have millions of samples. Mini-batch SGD processes a random subset (e.g., 32 samples) per update — faster per step, noisier gradients, but often converges to better solutions. Module 20 adds mini-batches, tracks epochs vs. steps, and plots loss curves that look like real DL training runs.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_18/tutorial.html">← Module 18: Multi-Layer Network</a>
+  <a href="../module_20/tutorial.html">Module 20: Training Loops →</a>
+</div>
+
+</body>
+</html>
