@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 03 — Visualisation: Seeing the Evidence</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#f0883e;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.7;padding:2rem}
+  h1{color:var(--accent);font-size:2rem;margin-bottom:.4rem}
+  h2{color:var(--green);font-size:1.3rem;margin:2rem 0 .8rem;border-left:3px solid var(--green);padding-left:.8rem}
+  h3{color:var(--orange);font-size:1.05rem;margin:1.2rem 0 .4rem}
+  p,li{color:var(--text);margin-bottom:.6rem}
+  ul{padding-left:1.5rem}
+  code{background:var(--panel);padding:.15rem .4rem;border-radius:4px;font-family:'Fira Code',monospace;font-size:.88em;color:var(--accent)}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  pre code{background:none;padding:0;color:var(--text)}
+  .badge{display:inline-block;background:var(--accent);color:#000;font-size:.75rem;padding:.2rem .6rem;border-radius:12px;font-weight:700;margin-right:.4rem}
+  .warn{background:#2d1c1c;border-left:4px solid var(--red);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .tip{background:#1c2d1c;border-left:4px solid var(--green);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem}
+  .qa{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.8rem 0}
+  .qa .q{color:var(--orange);font-weight:600}
+  .qa .a{color:var(--muted);margin-top:.4rem}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--panel);color:var(--accent);padding:.6rem 1rem;text-align:left;border:1px solid var(--border)}
+  td{padding:.5rem 1rem;border:1px solid var(--border);color:var(--text)}
+  .breadcrumb{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem}
+  .chart-demo{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.8rem 0;font-family:'Fira Code',monospace;font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="breadcrumb">Detective Agency ML Curriculum › Module 03</div>
+<h1>Module 03 — Visualisation: Seeing the Evidence</h1>
+<p><span class="badge">Beginner</span> A chart is a compressed story. Learn to tell it well and you'll spot patterns that would take hours to find in raw numbers.</p>
+
+<h2>00 — The Matplotlib Mental Model</h2>
+<p>Matplotlib uses a two-level object hierarchy: a <strong>Figure</strong> (the canvas) containing one or more <strong>Axes</strong> (the plot area). Always work with the <code>ax</code> object — it gives you full control.</p>
+<pre><code>import matplotlib
+matplotlib.use("Agg")          # Windows: render to file, not screen
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(figsize=(8, 5))   # fig = canvas, ax = plot area
+ax.plot([1, 2, 3], [4, 1, 3])
+plt.savefig("plot.png", dpi=120)
+plt.close()                              # always close — frees memory</code></pre>
+<div class="warn"><strong>Windows rule:</strong> Call <code>matplotlib.use("Agg")</code> BEFORE importing <code>pyplot</code>. Never call <code>plt.show()</code> — always <code>plt.savefig()</code>. The Agg backend renders to file without needing a display.</div>
+
+<h2>01 — Line Plot</h2>
+<p>Best for: trends over time, continuous data, rolling averages.</p>
+<pre><code>days = np.arange(1, 31)
+cases = 10 + 5 * np.sin(days / 3) + rng.normal(0, 1, 30)
+
+fig, ax = plt.subplots(figsize=(10, 4), facecolor="#0d1117")
+ax.set_facecolor("#161b22")
+
+ax.plot(days, cases, color="#58a6ff", linewidth=1.5, alpha=0.5, label="Daily")
+# 7-day rolling mean — smooths noise to reveal trend
+rolling = pd.Series(cases).rolling(7, center=True).mean()
+ax.plot(days, rolling, color="#f0883e", linewidth=2.5, label="7-day avg")
+
+ax.set_xlabel("Day",   color="#e6edf3")
+ax.set_ylabel("Cases", color="#e6edf3")
+ax.set_title("Case Trend", color="#e6edf3")
+ax.legend(facecolor="#0d1117", labelcolor="#e6edf3")
+ax.tick_params(colors="#8b949e")
+ax.spines[:].set_color("#30363d")</code></pre>
+
+<h2>02 — Scatter Plot</h2>
+<p>Best for: relationship between two continuous variables, spotting clusters and outliers.</p>
+<pre><code>ax.scatter(x, y,
+           c=colour_variable,  # encode a 3rd variable as colour
+           cmap="RdYlGn",
+           s=30,               # marker size
+           alpha=0.7,          # transparency
+           edgecolors="none")
+
+# Add a colour bar to explain the colour dimension
+plt.colorbar(sc, ax=ax, label="Solve rate")</code></pre>
+
+<h2>03 — Bar Chart</h2>
+<p>Best for: comparing discrete categories. Use horizontal bars when category labels are long.</p>
+<pre><code># Vertical bars
+ax.bar(categories, values, color="#58a6ff", edgecolor="#0d1117")
+
+# Horizontal bars (better for long labels)
+ax.barh(categories, values, color="#3fb950")
+
+# Grouped bars (multiple series)
+x = np.arange(len(categories))
+width = 0.35
+ax.bar(x - width/2, values_a, width, label="Series A", color="#58a6ff")
+ax.bar(x + width/2, values_b, width, label="Series B", color="#f85149")
+ax.set_xticks(x)
+ax.set_xticklabels(categories)</code></pre>
+
+<h2>04 — Histogram</h2>
+<p>Best for: understanding the distribution of a single variable.</p>
+<pre><code>ax.hist(data, bins=30, color="#bc8cff", edgecolor="#0d1117", alpha=0.85)
+
+# Add mean and median lines to show skewness
+ax.axvline(data.mean(),   color="#f85149", linestyle="--", label="Mean")
+ax.axvline(np.median(data), color="#3fb950", linestyle="--", label="Median")</code></pre>
+<div class="tip"><strong>Tip:</strong> When mean &gt; median, the distribution is right-skewed (long tail on the right). This is common for income, case durations, and many ML features.</div>
+
+<h2>05 — Box Plot</h2>
+<p>Best for: comparing distributions across groups, visualising quartiles and outliers.</p>
+<pre><code># One box per group
+groups = [data[data["district"]==d]["cases"].values for d in districts]
+bp = ax.boxplot(groups, labels=districts, patch_artist=True)
+
+# The box spans Q1–Q3 (interquartile range)
+# The line inside is the median
+# Whiskers extend to 1.5 × IQR
+# Points beyond whiskers are plotted as individual outliers</code></pre>
+
+<h2>06 — Multiple Subplots</h2>
+<pre><code># Grid of plots
+fig, axes = plt.subplots(2, 3, figsize=(14, 8))
+axes[0, 0].plot(...)    # row 0, col 0
+axes[1, 2].scatter(...) # row 1, col 2
+
+# Or iterate over all axes
+for ax in axes.flat:
+    ax.set_facecolor("#161b22")
+
+# After all plots:
+plt.tight_layout()            # avoid overlapping labels
+plt.savefig("grid.png", dpi=120, facecolor=fig.get_facecolor())</code></pre>
+
+<h2>07 — Seaborn: Statistical Plots in One Line</h2>
+<pre><code>import seaborn as sns
+
+# Correlation heatmap with annotations
+sns.heatmap(df.corr(), annot=True, fmt=".2f", cmap="RdBu_r", center=0, ax=ax)
+
+# Violin plot — shows full distribution per group
+sns.violinplot(data=df, x="district", y="cases", ax=ax)
+
+# Pair plot — scatter matrix of all numeric columns
+sns.pairplot(df[numeric_cols], hue="fraud")</code></pre>
+
+<h2>08 — Chart Type Cheat Sheet</h2>
+<table>
+  <tr><th>Chart type</th><th>Use when</th><th>Matplotlib call</th></tr>
+  <tr><td>Line plot</td><td>Trend over ordered x</td><td><code>ax.plot()</code></td></tr>
+  <tr><td>Scatter</td><td>Two continuous variables</td><td><code>ax.scatter()</code></td></tr>
+  <tr><td>Bar (vertical)</td><td>Compare categories</td><td><code>ax.bar()</code></td></tr>
+  <tr><td>Bar (horizontal)</td><td>Long category labels</td><td><code>ax.barh()</code></td></tr>
+  <tr><td>Histogram</td><td>Distribution of one variable</td><td><code>ax.hist()</code></td></tr>
+  <tr><td>Box plot</td><td>Compare distributions across groups</td><td><code>ax.boxplot()</code></td></tr>
+  <tr><td>Heatmap</td><td>Matrix values (correlation, confusion)</td><td><code>sns.heatmap()</code></td></tr>
+  <tr><td>Violin</td><td>Distribution + density by group</td><td><code>sns.violinplot()</code></td></tr>
+</table>
+
+<h2>09 — Styling Cheat Sheet</h2>
+<pre><code># Dark theme (used throughout this curriculum)
+fig.patch.set_facecolor("#0d1117")   # or facecolor="#0d1117" in subplots()
+ax.set_facecolor("#161b22")
+ax.tick_params(colors="#8b949e")
+ax.spines[:].set_color("#30363d")
+ax.set_title("Title", color="#e6edf3")
+ax.set_xlabel("X",    color="#e6edf3")
+ax.legend(facecolor="#0d1117", labelcolor="#e6edf3")
+
+# Always end with:
+plt.tight_layout()
+plt.savefig("name.png", dpi=120, facecolor=fig.get_facecolor())
+plt.close()</code></pre>
+
+<h2>10 — Q&amp;A Brain Check</h2>
+<div class="qa"><div class="q">Q: Why do we call <code>plt.close()</code> after saving?</div>
+<div class="a">A: Each figure holds references to its data and artists in memory. Without closing, a loop that creates 100 plots will accumulate 100 figures in RAM. <code>plt.close()</code> frees that memory. Use <code>plt.close("all")</code> to close every open figure at once.</div></div>
+<div class="qa"><div class="q">Q: When should you use a log scale?</div>
+<div class="a">A: When your data spans several orders of magnitude (e.g. prices from $1 to $1,000,000, or population counts). Use <code>ax.set_yscale("log")</code>. Log scales make exponential growth look linear and make small values visible when large ones dominate.</div></div>
+<div class="qa"><div class="q">Q: What's the difference between <code>fig.savefig()</code> and <code>plt.savefig()</code>?</div>
+<div class="a">A: <code>plt.savefig()</code> saves the <em>current active figure</em>. <code>fig.savefig()</code> explicitly saves the figure object <code>fig</code>. When working with multiple figures, always use <code>fig.savefig()</code> to be explicit about which one you're saving.</div></div>
+<div class="qa"><div class="q">Q: What does <code>alpha</code> control in a plot?</div>
+<div class="a">A: Transparency. <code>alpha=1.0</code> is fully opaque; <code>alpha=0.0</code> is invisible. Using <code>alpha=0.4</code> on overlapping scatter points lets you see density — where many points stack, the colour darkens.</div></div>
+
+<h2>11 — What's Next</h2>
+<ul>
+  <li><strong>Module 04:</strong> Linear Regression — fitting lines to data</li>
+  <li><strong>viz_advanced.py:</strong> GridSpec layouts, custom colormaps, inset axes, annotations, publication-quality export</li>
+</ul>
+</body>
+</html>
