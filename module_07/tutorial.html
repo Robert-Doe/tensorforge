@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 07 — Decision Trees: Logic the Detective Can Explain</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#f0883e;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.7;padding:2rem}
+  h1{color:var(--accent);font-size:2rem;margin-bottom:.4rem}
+  h2{color:var(--green);font-size:1.3rem;margin:2rem 0 .8rem;border-left:3px solid var(--green);padding-left:.8rem}
+  h3{color:var(--orange);font-size:1.05rem;margin:1.2rem 0 .4rem}
+  p,li{color:var(--text);margin-bottom:.6rem}
+  ul,ol{padding-left:1.5rem}
+  code{background:var(--panel);padding:.15rem .4rem;border-radius:4px;font-family:'Fira Code',monospace;font-size:.88em;color:var(--accent)}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  pre code{background:none;padding:0;color:var(--text)}
+  .badge{display:inline-block;background:var(--accent);color:#000;font-size:.75rem;padding:.2rem .6rem;border-radius:12px;font-weight:700;margin-right:.4rem}
+  .warn{background:#2d1c1c;border-left:4px solid var(--red);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .tip{background:#1c2d1c;border-left:4px solid var(--green);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .info{background:#1c1c2d;border-left:4px solid var(--accent);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem}
+  .qa{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.8rem 0}
+  .qa .q{color:var(--orange);font-weight:600}
+  .qa .a{color:var(--muted);margin-top:.4rem}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--panel);color:var(--accent);padding:.6rem 1rem;text-align:left;border:1px solid var(--border)}
+  td{padding:.5rem 1rem;border:1px solid var(--border);color:var(--text)}
+  .breadcrumb{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem}
+  .math{font-family:'Fira Code',monospace;background:var(--panel);padding:.4rem .8rem;border-radius:6px;display:inline-block;margin:.3rem 0;color:var(--purple)}
+  .tree{font-family:'Fira Code',monospace;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;color:var(--text);font-size:.88rem;line-height:1.8}
+  .tree .node{color:var(--accent)}
+  .tree .leaf-yes{color:var(--green)}
+  .tree .leaf-no{color:var(--red)}
+</style>
+</head>
+<body>
+<div class="breadcrumb">Detective Agency ML Curriculum › Module 07</div>
+<h1>Module 07 — Decision Trees: Logic the Detective Can Explain</h1>
+<p><span class="badge">Beginner</span> Decision trees are the most human-readable ML model. They make decisions the same way a detective does: ask a yes/no question, follow the answer, ask another question, reach a conclusion.</p>
+
+<h2>00 — How a Decision Tree Works</h2>
+<div class="tree">
+<span class="node">amount > $500?</span>
+├── Yes → <span class="node">overseas_txn == True?</span>
+│         ├── Yes → <span class="leaf-yes">FRAUD (95% confidence)</span>
+│         └── No  → <span class="node">hour < 3 AM?</span>
+│                   ├── Yes → <span class="leaf-yes">FRAUD (78%)</span>
+│                   └── No  → <span class="leaf-no">LEGIT (82%)</span>
+└── No  → <span class="leaf-no">LEGIT (91% confidence)</span>
+</div>
+<p>Each <strong>internal node</strong> asks a question about one feature. Each <strong>branch</strong> follows one answer. Each <strong>leaf</strong> makes a prediction. A prediction is reached by following the path from root to a leaf.</p>
+
+<h2>01 — Impurity: How the Tree Chooses Questions</h2>
+<p>At every node, the tree picks the feature+threshold combination that reduces <strong>impurity</strong> the most. Impurity measures how mixed the classes are in a node.</p>
+
+<h3>Gini Impurity</h3>
+<div class="math">Gini = 1 - Σ pᵢ²</div>
+<table>
+  <tr><th>Node composition</th><th>Gini</th><th>Interpretation</th></tr>
+  <tr><td>100% class A (pure)</td><td>0.000</td><td>No impurity — perfect split</td></tr>
+  <tr><td>90% A / 10% B</td><td>0.180</td><td>Mostly pure</td></tr>
+  <tr><td>70% A / 30% B</td><td>0.420</td><td>Moderate mix</td></tr>
+  <tr><td>50% A / 50% B</td><td>0.500</td><td>Maximum impurity</td></tr>
+</table>
+<pre><code>def gini(y):
+    classes, counts = np.unique(y, return_counts=True)
+    probs = counts / len(y)
+    return 1 - np.sum(probs ** 2)
+
+# Information Gain = parent impurity - weighted average child impurities
+ig = gini(y_parent) - (len(y_left)/len(y))*gini(y_left) \
+                    - (len(y_right)/len(y))*gini(y_right)</code></pre>
+
+<h2>02 — Fitting a Decision Tree</h2>
+<pre><code>from sklearn.tree import DecisionTreeClassifier, export_text, plot_tree
+
+# Fit (no scaling needed — trees are scale-invariant)
+tree = DecisionTreeClassifier(
+    criterion="gini",     # "gini" or "entropy"
+    max_depth=4,          # limit depth to prevent overfitting
+    min_samples_leaf=5,   # leaf must contain ≥ 5 samples
+    random_state=42,
+)
+tree.fit(X_train, y_train)
+
+# Human-readable text representation
+print(export_text(tree, feature_names=FEATURE_NAMES, max_depth=3))
+
+# Visual tree diagram (saves to file)
+fig, ax = plt.subplots(figsize=(16, 8))
+plot_tree(tree, feature_names=FEATURE_NAMES,
+          class_names=["Legit","Fraud"],
+          filled=True, rounded=True, ax=ax)
+fig.savefig("tree.png", dpi=120)</code></pre>
+
+<h2>03 — Overfitting: The Depth Problem</h2>
+<p>A tree with unlimited depth memorises every training sample — it overfits. A tree with too little depth can't capture real patterns — it underfits. Use cross-validation to find the sweet spot.</p>
+<table>
+  <tr><th>max_depth</th><th>Train accuracy</th><th>Test accuracy</th><th>Verdict</th></tr>
+  <tr><td>1</td><td>~65%</td><td>~63%</td><td>Underfit — too simple</td></tr>
+  <tr><td>3</td><td>~85%</td><td>~84%</td><td>Good balance</td></tr>
+  <tr><td>5</td><td>~95%</td><td>~86%</td><td>Starting to overfit</td></tr>
+  <tr><td>None</td><td>100%</td><td>~75%</td><td>Severe overfitting</td></tr>
+</table>
+<pre><code>from sklearn.model_selection import cross_val_score
+
+depths = [1, 2, 3, 4, 5, 6, 7, None]
+for d in depths:
+    tree = DecisionTreeClassifier(max_depth=d, random_state=42)
+    cv   = cross_val_score(tree, X_tr, y_tr, cv=5, scoring="accuracy")
+    print(f"depth={str(d):4s}  cv_mean={cv.mean():.4f}")</code></pre>
+
+<h2>04 — Feature Importance</h2>
+<p>After fitting, each feature gets an importance score: its total Gini reduction weighted by the number of samples it split, normalised to sum to 1.</p>
+<pre><code>importances = tree.feature_importances_   # array of shape (n_features,)
+
+# Sort and plot
+sorted_idx = np.argsort(importances)[::-1]
+for i in sorted_idx:
+    bar = "█" * int(importances[i] * 40)
+    print(f"  {FEATURE_NAMES[i]:20s} {importances[i]:.4f} {bar}")</code></pre>
+<div class="tip"><strong>Interpretation:</strong> High importance means the model relies heavily on that feature. Low importance (near 0) means the tree almost never split on it — that feature may be irrelevant OR correlated with a more important one.</div>
+
+<h2>05 — No Scaling Needed</h2>
+<div class="info"><strong>Decision trees are completely scale-invariant.</strong> At each split, the tree searches all possible thresholds for each feature. Whether income is in dollars or thousands of dollars, the threshold adjusts automatically. Never scale features before a tree — it has zero effect and adds confusion.</div>
+
+<h2>06 — Decision Tree Regression</h2>
+<pre><code>from sklearn.tree import DecisionTreeRegressor
+
+reg_tree = DecisionTreeRegressor(max_depth=4, random_state=42)
+reg_tree.fit(X_train, y_train)
+
+# Each leaf predicts the MEAN of training samples in that leaf
+# — not a probability, but a continuous value</code></pre>
+
+<h2>07 — Cost-Complexity Pruning</h2>
+<p>Post-pruning: grow the full tree, then prune branches whose removal improves generalisation. The <code>ccp_alpha</code> parameter controls how aggressively to prune.</p>
+<pre><code># Find the pruning path
+path = tree.cost_complexity_pruning_path(X_tr, y_tr)
+ccp_alphas = path.ccp_alphas
+
+# CV over alpha values
+from sklearn.model_selection import cross_val_score
+cv_scores = []
+for alpha in ccp_alphas:
+    t = DecisionTreeClassifier(ccp_alpha=alpha, random_state=42)
+    cv_scores.append(cross_val_score(t, X_tr, y_tr, cv=5).mean())
+
+best_alpha = ccp_alphas[np.argmax(cv_scores)]
+final_tree = DecisionTreeClassifier(ccp_alpha=best_alpha, random_state=42)
+final_tree.fit(X_tr, y_tr)</code></pre>
+
+<h2>08 — Strengths and Weaknesses</h2>
+<div class="grid">
+  <div class="card">
+    <h3>✓ Strengths</h3>
+    <ul>
+      <li>Fully interpretable: <code>export_text()</code></li>
+      <li>Handles mixed feature types (numeric + categorical)</li>
+      <li>No scaling required</li>
+      <li>Handles non-linear relationships</li>
+      <li>Fast training and prediction</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>✗ Weaknesses</h3>
+    <ul>
+      <li>High variance: tiny data changes → very different tree</li>
+      <li>Axis-aligned splits miss diagonal boundaries</li>
+      <li>Doesn't extrapolate beyond training range</li>
+      <li>Single trees rarely beat ensemble methods</li>
+      <li>Unstable — the starting point for Random Forest</li>
+    </ul>
+  </div>
+</div>
+
+<h2>09 — Q&amp;A Brain Check</h2>
+<div class="qa"><div class="q">Q: Why does a tree with unlimited depth get 100% training accuracy?</div>
+<div class="a">A: It creates one leaf per training sample (or per group of identical-feature samples). Every training point falls into its own perfectly pure leaf. But those leaves describe noise, not the true signal — they fail completely on new data.</div></div>
+<div class="qa"><div class="q">Q: What's the difference between Gini impurity and entropy?</div>
+<div class="a">A: Both measure node impurity. Entropy (−Σ pᵢ log₂ pᵢ) has a slightly sharper peak — it penalises 50/50 splits a bit more. In practice they produce nearly identical trees. Gini is faster to compute (no logarithm), so it's the default.</div></div>
+<div class="qa"><div class="q">Q: Why do feature importances sum to 1?</div>
+<div class="a">A: They are normalised by sklearn. Each node's Gini reduction is weighted by the fraction of samples it processes, then all values across all nodes are summed and divided by the total. This makes importances comparable across trees of different sizes.</div></div>
+<div class="qa"><div class="q">Q: How do you handle categorical features in a decision tree?</div>
+<div class="a">A: sklearn's DecisionTreeClassifier requires numeric input. Encode categories with <code>OrdinalEncoder</code> (preserves one column) or <code>OneHotEncoder</code> (one column per category). For ordered categories (Low/Medium/High), ordinal encoding is fine. For nominal categories with no order, one-hot is safer.</div></div>
+
+<h2>10 — What's Next</h2>
+<ul>
+  <li><strong>Module 08:</strong> Naive Bayes — probabilistic classification using Bayes' theorem</li>
+  <li><strong>tree_advanced.py:</strong> Gini/entropy scratch, threshold search, regression tree depth comparison, bootstrap instability demo</li>
+</ul>
+</body>
+</html>
