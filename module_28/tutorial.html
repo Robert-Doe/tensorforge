@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 28 — End-to-End ML Pipeline</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  .callout.green{border-color:var(--green)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  /* Pipeline steps */
+  .steps{display:flex;flex-direction:column;gap:.5rem;margin:1rem 0}
+  .step{display:flex;align-items:flex-start;gap:.8rem}
+  .step-num{background:var(--accent);color:#000;font-weight:700;border-radius:50%;width:1.8rem;height:1.8rem;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0;margin-top:.15rem}
+  .step-body{flex:1}
+  .step-title{color:var(--accent);font-weight:600}
+  .step-desc{color:var(--muted);font-size:.9rem}
+  /* Module grid */
+  .mod-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin:1rem 0}
+  .mod{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.5rem .7rem;font-size:.78rem}
+  .mod .num{color:var(--muted);font-size:.7rem}
+  .mod .name{color:var(--green)}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> This is the final module — it assumes all 27 prior modules. No new concepts are introduced; everything here is assembly.</p>
+  <p><strong>Key idea:</strong> A trained model is not a product. A <em>pipeline</em> is — it encapsulates the full path from raw data to prediction, handles all preprocessing automatically, and can be saved to disk and reloaded months later for inference on new cases.</p>
+</div>
+</section>
+
+<h1>Module 28 — End-to-End ML Pipeline</h1>
+<h2>Ada's full case intake system, from raw report to verdict</h2>
+
+<section>
+<h2>01 · The Big Analogy — Everything Together</h2>
+<p>Ada's agency has grown. She now receives dozens of new cases a day. She can't personally train every new detective on how to fill in the case form, normalize the evidence scores, or convert district names to numbers. She needs a <strong>system</strong> — one that takes a raw case report (with missing fields, text district names, and mixed data types) and automatically produces a verdict.</p>
+<p>That system is an ML Pipeline. It's Ada's entire operation codified: the intake clerk (imputation), the file clerk (feature engineering and scaling), the junior detectives (the trained model), and the verdict stamp (predict). When a new case arrives, it enters one end of the system and a "SOLVED" or "UNSOLVED" prediction exits the other — with no manual preprocessing by the caller.</p>
+<p>And because the system is saved to disk, next year's Ada can pick it up without re-training anything. This is what makes ML useful in production rather than just in notebooks.</p>
+</section>
+
+<section>
+<h2>02 · The Eight Steps</h2>
+<div class="steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <div class="step-title">Data Loading &amp; Inspection</div>
+      <div class="step-desc">Load CSV, count missing values, check class balance. Never touch test data here.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <div class="step-title">Missing Value Imputation</div>
+      <div class="step-desc">Fill NaN with column medians. Medians are robust to outliers; means are not.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <div class="step-title">Train / Test Split</div>
+      <div class="step-desc">Split FIRST. Everything after this point must see only training data. Test set is locked away until Step 6.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <div class="step-title">Model Selection (CV)</div>
+      <div class="step-desc">Compare 3 algorithms with stratified k-fold CV. Rank by AUC. No test data used.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <div class="step-title">Hyperparameter Tuning</div>
+      <div class="step-desc">Grid-search the CV winner. Still no test data. Best params chosen by cross-validation score.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <div class="step-title">Final Evaluation</div>
+      <div class="step-desc">Fit on full training set. Evaluate ONCE on held-out test. This is your honest accuracy estimate.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">7</div>
+    <div class="step-body">
+      <div class="step-title">Save Pipeline</div>
+      <div class="step-desc">Serialise the fitted Pipeline (preprocessor + model). The whole inference graph, not just weights.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">8</div>
+    <div class="step-body">
+      <div class="step-title">Inference on New Data</div>
+      <div class="step-desc">Load the saved pipeline. Pass raw rows (same format as training). Call predict(). Done.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section>
+<h2>03 · The Critical Rule — Test Set Isolation</h2>
+<pre><code># WRONG — classic data leakage:
+scaler.fit(X_all)           # sees test data during fit!
+X_scaled = scaler.transform(X_all)
+X_train, X_test = train_test_split(X_scaled, ...)
+
+# CORRECT — split first, then fit only on train:
+X_train_raw, X_test_raw, y_train, y_test = train_test_split(X, y, ...)
+
+pipeline = Pipeline([
+    ("scaler", StandardScaler()),    # fit() called only on X_train inside CV
+    ("model",  RandomForestClassifier()),
+])
+pipeline.fit(X_train_raw, y_train)   # scaler.fit happens here — never sees X_test
+pipeline.score(X_test_raw, y_test)   # scaler.transform(X_test) uses train stats only</code></pre>
+
+<div class="callout warn">
+  <strong>Why does leakage matter?</strong> If the scaler's mean and std were computed on the full dataset (including test rows), the test-set evaluation is optimistic — the model has indirectly "seen" the test distribution. The reported accuracy looks better than what you'd get on truly new data. This is one of the most common bugs in ML projects and is hard to detect without code review.
+</div>
+</section>
+
+<section>
+<h2>04 · Save and Load the Full Pipeline</h2>
+<pre><code">import pickle
+
+# Save — the whole Pipeline (preprocessor + tuned model), fitted on training data
+with open("saved_models/best_pipeline.pkl", "wb") as f:
+    pickle.dump(fitted_pipeline, f)
+
+# Load — months later, on a different machine
+with open("saved_models/best_pipeline.pkl", "rb") as f:
+    loaded = pickle.load(f)
+
+# Inference — raw data, same format as training
+new_case = pd.DataFrame({
+    "district":          ["North"],
+    "case_type":         ["Theft"],
+    "num_witnesses":     [5],
+    "evidence_strength": [0.92],
+    "suspect_age":       [34],
+    "days_open":         [7],
+    "prior_convictions": [2],
+    "tip_received":      [1],
+})
+prediction = loaded.predict(new_case)      # ["SOLVED"] or [1]
+proba      = loaded.predict_proba(new_case)[:, 1]   # [0.93]</code></pre>
+
+<div class="callout">
+  <strong>Pickle vs joblib vs ONNX:</strong> Pickle works but is tied to the Python version and scikit-learn version that saved the model. For production, use <code>joblib.dump()</code> (faster for large numpy arrays) or export to ONNX format for cross-language inference. For deployment, Docker containers pinning the exact library versions are the robust solution.
+</div>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_28&gt; python main.py</span><br><br>
+  MODULE 28 — End-to-End ML Pipeline<br>
+  ==========================================================<br>
+  <br>
+  ── Step 1: Data Generation &amp; Inspection ───────────<br>
+  Generated dataset → data/case_outcomes.csv  (1200 rows)<br>
+  Data shape: (1200, 9)<br>
+  Columns: ['district', 'case_type', 'num_witnesses', ...]<br>
+  Missing values:<br>
+  &nbsp;&nbsp;evidence_strength: 36 (3.0%)<br>
+  Class distribution (target):<br>
+  &nbsp;&nbsp;1&nbsp;&nbsp; 683 (56.9%)<br>
+  &nbsp;&nbsp;0&nbsp;&nbsp; 517 (43.1%)<br>
+  <br>
+  ── Step 2: Missing Value Imputation ────────────────<br>
+  &nbsp;&nbsp;Imputed evidence_strength: 0 remaining NaN (median=0.508)<br>
+  <br>
+  ── Step 3: Train/Test Split ────────────────────────<br>
+  Train: 960 samples&nbsp; Test: 240 samples<br>
+  Class balance (train): 56.88% solved<br>
+  <br>
+  ── Step 4: Model Selection (5-fold CV) ─────────────<br>
+  &nbsp;&nbsp;Logistic Regression&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Acc=0.8073±0.0098&nbsp; AUC=0.8731±0.0112<br>
+  &nbsp;&nbsp;Random Forest&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Acc=0.8531±0.0147&nbsp; AUC=0.9204±0.0093<br>
+  &nbsp;&nbsp;Gradient Boosting&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Acc=0.8573±0.0121&nbsp; AUC=0.9241±0.0087<br>
+  <br>
+  Best model by CV AUC: Gradient Boosting (0.9241)<br>
+  <br>
+  ── Step 5: Hyperparameter Tuning ───────────────────<br>
+  Best params: {'model__learning_rate': 0.1, 'model__max_depth': 5, 'model__n_estimators': 200}<br>
+  Best CV AUC: 0.9298<br>
+  <br>
+  ── Step 6: Final Evaluation ────────────────────────<br>
+  Final evaluation on held-out test set:<br>
+  &nbsp;&nbsp;Accuracy : 0.8792<br>
+  &nbsp;&nbsp;ROC-AUC  : 0.9341<br>
+  <br>
+  ── Step 7: Save &amp; Load Pipeline ────────────────────<br>
+  Saved pipeline → saved_models/best_pipeline.pkl<br>
+  Loaded pipeline ← saved_models/best_pipeline.pkl<br>
+  <br>
+  ── Step 8: Inference on New Cases ──────────────────<br>
+  New case predictions:<br>
+  &nbsp;&nbsp;Case 1: SOLVED   (confidence=0.923)<br>
+  &nbsp;&nbsp;Case 2: UNSOLVED (confidence=0.071)<br>
+  &nbsp;&nbsp;Case 3: SOLVED   (confidence=0.744)<br>
+  <br>
+  Saved → plots/feature_importances.png<br>
+  <br>
+  ==========================================================<br>
+  CURRICULUM COMPLETE — All 28 modules finished!<br>
+  ==========================================================
+</div>
+</section>
+
+<section>
+<h2>06 · What You Built — All 28 Modules</h2>
+<div class="mod-grid">
+  <div class="mod"><div class="num">M01</div><div class="name">NumPy Arrays</div></div>
+  <div class="mod"><div class="num">M02</div><div class="name">Pandas</div></div>
+  <div class="mod"><div class="num">M03</div><div class="name">Matplotlib/Seaborn</div></div>
+  <div class="mod"><div class="num">M04</div><div class="name">Linear Regression</div></div>
+  <div class="mod"><div class="num">M05</div><div class="name">Logistic Regression</div></div>
+  <div class="mod"><div class="num">M06</div><div class="name">k-NN</div></div>
+  <div class="mod"><div class="num">M07</div><div class="name">Decision Trees</div></div>
+  <div class="mod"><div class="num">M08</div><div class="name">Naive Bayes</div></div>
+  <div class="mod"><div class="num">M09</div><div class="name">Model Evaluation</div></div>
+  <div class="mod"><div class="num">M10</div><div class="name">Scikit-learn API</div></div>
+  <div class="mod"><div class="num">M11</div><div class="name">SVMs</div></div>
+  <div class="mod"><div class="num">M12</div><div class="name">Ensembles</div></div>
+  <div class="mod"><div class="num">M13</div><div class="name">k-Means</div></div>
+  <div class="mod"><div class="num">M14</div><div class="name">PCA</div></div>
+  <div class="mod"><div class="num">M15</div><div class="name">Feature Engineering</div></div>
+  <div class="mod"><div class="num">M16</div><div class="name">Single Neuron</div></div>
+  <div class="mod"><div class="num">M17</div><div class="name">Backpropagation</div></div>
+  <div class="mod"><div class="num">M18</div><div class="name">MLP</div></div>
+  <div class="mod"><div class="num">M19</div><div class="name">Activations</div></div>
+  <div class="mod"><div class="num">M20</div><div class="name">Training Loops</div></div>
+  <div class="mod"><div class="num">M21</div><div class="name">Regularisation</div></div>
+  <div class="mod"><div class="num">M22</div><div class="name">PyTorch Intro</div></div>
+  <div class="mod"><div class="num">M23</div><div class="name">Conv Layer</div></div>
+  <div class="mod"><div class="num">M24</div><div class="name">Full CNN</div></div>
+  <div class="mod"><div class="num">M25</div><div class="name">BatchNorm+Dropout</div></div>
+  <div class="mod"><div class="num">M26</div><div class="name">Transfer Learning</div></div>
+  <div class="mod"><div class="num">M27</div><div class="name">RNNs &amp; LSTMs</div></div>
+  <div class="mod"><div class="num">M28</div><div class="name">E2E Pipeline ✓</div></div>
+</div>
+</section>
+
+<section>
+<h2>07 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The pipeline saves all preprocessing fitted on the training data. If, six months later, a new district "Central" appears in production data that was never in the training set, what happens when you call <code>loaded.predict(new_case)</code>?</p>
+  <p>Specifically: what does <code>OneHotEncoder(handle_unknown="ignore")</code> do with "Central"? Does the model crash? Is the prediction reliable?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> The pipeline does NOT crash. <code>handle_unknown="ignore"</code> means unseen categories are encoded as all-zeros — as if the district column were absent. The model receives a valid input and produces a prediction, but that prediction may be unreliable because the model never saw this district during training. This is called <strong>distribution shift</strong>: the production distribution has drifted from the training distribution. The solution is to monitor prediction confidence on new data, set up alerts when unseen categories appear, and periodically retrain on fresh data. Trusting a silently-degraded prediction is a real production risk.
+</div>
+</section>
+
+<section>
+<h2>08 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Why evaluate ONCE on the test set instead of checking it repeatedly?</div>
+  <div class="qa-a">Every time you look at the test set to decide what to change next, you're effectively training on it. After 10 such peeks, your model has been implicitly tuned to the test set's specific noise and quirks — it won't generalise to new data nearly as well as the reported accuracy suggests. The test set is your single, final, honest performance estimate. Cross-validation is the correct tool for all intermediate decisions.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What should I do if the CV accuracy and test accuracy are very different?</div>
+  <div class="qa-a">A big gap usually means one of: (1) the test set is small and the estimate is noisy — compute a confidence interval; (2) you peeked at the test set during development (leakage); (3) the train/test split is not representative — try stratified splits or check for time-based splits if the data is temporal; (4) the test set has different class balance or feature distribution than training — investigate with a data audit.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: After finishing these 28 modules, what should I learn next?</div>
+  <div class="qa-a">Four strong directions: (1) <strong>Transformers &amp; Attention</strong> — the architecture behind GPT, BERT, and modern LLMs; self-attention replaced LSTMs for most NLP tasks. (2) <strong>MLOps</strong> — deploying models as REST APIs (FastAPI + Docker), monitoring drift, retraining pipelines (MLflow, Weights &amp; Biases). (3) <strong>Probabilistic ML</strong> — Bayesian inference, uncertainty quantification, Gaussian Processes. (4) <strong>Reinforcement Learning</strong> — agents learning from reward signals (Q-learning, policy gradients, PPO).</div>
+</div>
+</section>
+
+<section>
+<h2>09 · Congratulations</h2>
+<div class="callout green">
+  <p><strong>You completed all 28 modules.</strong></p>
+  <p>You started with NumPy array indexing and ended with a production-ready ML pipeline. Along the way you built linear regression from gradient descent, decision trees from Gini impurity, neural networks from the chain rule, convolutional networks from sliding dot products, and LSTM classifiers from gated state machines — all from scratch before switching to PyTorch.</p>
+  <p>Ada's Detective Agency is fully automated. The curriculum is complete.</p>
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_27/tutorial.html">← Module 27: RNNs &amp; LSTMs</a>
+  <span style="color:var(--muted)">End of curriculum</span>
+</div>
+
+</body>
+</html>
