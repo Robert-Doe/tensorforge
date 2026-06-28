@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 10 — Scikit-learn Intro</title>
+<style>
+  :root {
+    --bg:#0d1117;--surface:#161b22;--border:#30363d;
+    --text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;
+    --green:#3fb950;--yellow:#d29922;--red:#f85149;
+    --teal:#39d353;--purple:#bc8cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
+  .card h3{color:var(--purple);margin-bottom:.5rem}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .compare-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:.5rem 0}
+  .scratch{background:#1a1a2e;border:1px solid #3d3d6b;border-radius:6px;padding:.8rem}
+  .sklearn{background:#1a2e1a;border:1px solid #3b6b3b;border-radius:6px;padding:.8rem}
+  .tag{display:inline-block;padding:.1rem .5rem;border-radius:4px;font-size:.75rem;font-weight:700;margin-bottom:.4rem}
+  .tag.scratch{background:#3d3d6b;color:#aaaaff}
+  .tag.sklearn{background:#3b6b3b;color:var(--green)}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Modules 01-09. You must have written the scratch implementations first — this module is only meaningful if you understand what's happening inside sklearn's one-liners.</p>
+  <p><strong>Install:</strong> <code>pip install scikit-learn==1.5.0</code></p>
+</div>
+</section>
+
+<h1>Module 10 — Scikit-learn Intro</h1>
+<h2>Your scratch detective agency, now with a police database</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>For the past six modules you built your own fingerprint scanner, lie detector, and evidence database from scratch — wire by wire. You now know exactly how they work.</p>
+<p>The police department just handed you a <strong>professional toolkit</strong> with the same tools, already built and tested by thousands of engineers. You don't have to throw away your knowledge — you use it to understand what the toolkit is doing under the hood. Every detective who built their own scanner now appreciates why the department-issue one is set up the way it is.</p>
+<p>That toolkit is <strong>scikit-learn</strong>.</p>
+</section>
+
+<section>
+<h2>02 · Side-by-Side Comparison</h2>
+
+<div class="compare-row">
+  <div class="scratch"><span class="tag scratch">SCRATCH — M05</span>
+<pre style="margin:0;border:none;padding:0;background:none"><code>class LogisticRegression:
+    def __init__(self, lr, epochs):
+        self.lr = lr
+        self.epochs = epochs
+    def fit(self, X, y):
+        n, d = X.shape
+        self.w = np.zeros(d)
+        self.b = 0.0
+        for _ in range(self.epochs):
+            z = X @ self.w + self.b
+            p = sigmoid(z)
+            e = p - y
+            self.w -= self.lr*(X.T@e)/n
+            self.b -= self.lr*e.mean()
+    def predict(self, X):
+        return (sigmoid(X@self.w+self.b)>=.5)
+# ~60 lines total</code></pre>
+  </div>
+  <div class="sklearn"><span class="tag sklearn">SKLEARN — M10</span>
+<pre style="margin:0;border:none;padding:0;background:none"><code>from sklearn.linear_model import (
+    LogisticRegression
+)
+
+model = LogisticRegression(
+    max_iter=1000
+)
+model.fit(X_train, y_train)
+preds = model.predict(X_test)
+# 3 lines — same math inside</code></pre>
+  </div>
+</div>
+
+<p>Same gradient descent. Same sigmoid. Same cross-entropy loss. sklearn just hides the loop.</p>
+</section>
+
+<section>
+<h2>03 · The Unified sklearn Pattern</h2>
+<p>Every sklearn model follows the same three-method contract:</p>
+<pre><code>model = SomeModel(hyperparameter=value)   # 1. instantiate with config
+model.fit(X_train, y_train)               # 2. learn from training data
+preds = model.predict(X_test)            # 3. make predictions</code></pre>
+
+<p>Optionally a fourth:</p>
+<pre><code>probs = model.predict_proba(X_test)      # 4. get probability scores (not all models)</code></pre>
+
+<table>
+  <tr><th>Scratch (M04-M08)</th><th>sklearn equivalent</th><th>Module</th></tr>
+  <tr><td>LinearRegression class</td><td><code>sklearn.linear_model.LinearRegression</code></td><td>M04</td></tr>
+  <tr><td>LogisticRegression class</td><td><code>sklearn.linear_model.LogisticRegression</code></td><td>M05</td></tr>
+  <tr><td>KNearestNeighbors class</td><td><code>sklearn.neighbors.KNeighborsClassifier</code></td><td>M06</td></tr>
+  <tr><td>DecisionTreeClassifier class</td><td><code>sklearn.tree.DecisionTreeClassifier</code></td><td>M07</td></tr>
+  <tr><td>GaussianNaiveBayes class</td><td><code>sklearn.naive_bayes.GaussianNB</code></td><td>M08</td></tr>
+</table>
+</section>
+
+<section>
+<h2>04 · Cross-Validation in One Line</h2>
+<pre><code>from sklearn.model_selection import cross_val_score
+
+scores = cross_val_score(model, X, y, cv=5, scoring="accuracy")
+print(f"{scores.mean():.3f} ± {scores.std():.3f}")
+# Replaces the 25-line cross_val_accuracy() we wrote in M09</code></pre>
+<div class="callout warn">
+  <strong>sklearn's cross_val_score refits the model from scratch on each fold.</strong> It does NOT use whatever you already trained. Pass the unfitted model object.
+</div>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <div class="prompt">PS C:\bob_ml_dl\module_10&gt; python main.py</div>
+  <pre style="background:none;border:none;padding:0;margin:0;color:#e6edf3">
+MODULE 10 — Scikit-learn Intro
+====================================================
+Train: 96 samples | Test: 24 samples
+
+=== K-Fold Cross-Validation (k=5) via sklearn ===
+Model                  Mean Acc   ± Std
+------------------------------------------
+LogisticRegression     0.742     ± 0.038
+KNN-5                  0.708     ± 0.051
+DecisionTree-3         0.700     ± 0.045
+NaiveBayes             0.725     ± 0.042
+
+=== Full Evaluation on Test Split ===
+Model                       P      R     F1    AUC
+----------------------------------------------------
+LogisticRegression       0.741  0.714  0.727  0.793
+KNN-5                    0.693  0.679  0.686  0.741
+DecisionTree-3           0.682  0.700  0.691  0.762
+NaiveBayes               0.727  0.693  0.710  0.781
+
+Lines of code comparison:
+  Scratch LogisticRegression (M05): ~60 lines
+  sklearn LogisticRegression (M10):  3 lines
+
+Same math. Same results. Zero reimplementation.
+  </pre>
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>Look at the CV accuracy numbers in M10 vs M09. Are they identical? If not, why might they differ slightly?</p>
+  <p><em>Hint: does sklearn's cross_val_score use the same shuffle seed as our M09 implementation?</em></p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> They may differ slightly because sklearn's cross_val_score uses its own internal random state for shuffling folds, while our M09 implementation used RANDOM_SEED=42 with np.random.default_rng. Same algorithm, different split boundaries → slightly different fold compositions → slightly different accuracy estimates. This is normal and expected.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+
+<div class="qa-block">
+  <div class="qa-q">Q: Should I always use sklearn instead of writing from scratch?</div>
+  <div class="qa-a">In production: yes, almost always. sklearn is faster, tested, and maintained. From scratch is for learning — once you understand the algorithm, use the library. You wouldn't hand-solder a circuit every time you need a transistor.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q: What is max_iter=1000 in LogisticRegression?</div>
+  <div class="qa-a">sklearn's LogisticRegression uses an optimiser (L-BFGS by default) that runs for up to max_iter iterations. If you get a ConvergenceWarning, increase it. Our scratch version had an explicit epochs constant for the same reason.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q: Why does sklearn's KNN need no fit() in the traditional sense?</div>
+  <div class="qa-a">KNN is a lazy learner — fit() just stores the training data. The actual computation happens at predict() time. This is identical to our scratch KNN in M06, where fit() did nothing but self.X_train = X.copy().</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q: What does stratify=y do in train_test_split?</div>
+  <div class="qa-a">It ensures the class distribution in your train and test splits matches the original dataset. If 60% of cases are solved overall, both train and test will also be ~60% solved. Without it, a bad random split could accidentally put all the "solved" cases in training, making test evaluation misleading.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 11 — Support Vector Machines</strong><br>
+  The big idea: instead of drawing a line that merely separates two classes, find the line with the <em>maximum margin</em> — the widest possible gap between the decision boundary and the nearest data points. Plus: what happens when the data isn't linearly separable? Kernels to the rescue.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_09/tutorial.html">← Module 09: Evaluation</a>
+  <a href="../module_11/tutorial.html">Module 11: SVMs →</a>
+</div>
+
+</body>
+</html>
