@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 27 — RNNs & LSTMs</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  /* RNN unrolled diagram */
+  .rnn-steps{display:flex;align-items:center;gap:.5rem;margin:1rem 0;overflow-x:auto}
+  .rnn-cell{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;text-align:center;min-width:80px}
+  .rnn-cell .label{color:var(--accent);font-size:.8rem;font-weight:600}
+  .rnn-cell .io{color:var(--muted);font-size:.72rem}
+  .rnn-arrow{color:var(--muted);font-size:1.1rem;flex-shrink:0}
+  /* Gate diagram */
+  .gates{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin:1rem 0}
+  .gate{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.7rem 1rem}
+  .gate h3{font-size:.88rem;margin-bottom:.3rem}
+  .gate .eq{font-size:.8rem;color:var(--green);font-family:monospace}
+  .gate .role{font-size:.78rem;color:var(--muted);margin-top:.2rem}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 22 (PyTorch basics). No new datasets to download — synthetic reviews are generated in code.</p>
+  <p><strong>Key idea:</strong> Convolutional networks process a fixed spatial grid. Recurrent networks process one element at a time, maintaining a <em>hidden state</em> that carries memory of all previous elements. LSTMs extend vanilla RNNs with gating mechanisms to control what to remember and what to forget over long sequences.</p>
+</div>
+</section>
+
+<h1>Module 27 — RNNs &amp; LSTMs</h1>
+<h2>Ada learns to read a case file one word at a time — and remember what mattered</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Ada receives a case report one word at a time, transmitted over a slow teletype machine. She can't see the whole report at once — just the current word. But she has a notepad (the hidden state). After reading each word, she updates her notepad: "new clue received — suspect previously mentioned, update suspicion level." By the time the last word arrives, her notepad contains a summary of the entire report.</p>
+<p>That's a Recurrent Neural Network. The notepad is the hidden state vector <code>h_t</code>. Each word is an input <code>x_t</code>. The update rule is: <code>h_t = tanh(W_hh × h_{t-1} + W_xh × x_t + b)</code>. After the last word, <code>h_T</code> is handed to the classifier.</p>
+<p>The problem: after very long reports, the tanh squashing function means early words gradually get "washed out" of the notepad. Ada reads 200 words and forgets the first clue. This is the <strong>vanishing gradient problem</strong>. LSTMs give her a second, more permanent notepad (the cell state) with explicit controls for what to keep and what to erase.</p>
+</section>
+
+<section>
+<h2>02 · Vanilla RNN — Unrolled</h2>
+
+<div class="rnn-steps">
+  <div class="rnn-cell">
+    <div class="label">h₀</div>
+    <div class="io">zeros</div>
+  </div>
+  <span class="rnn-arrow">→</span>
+  <div class="rnn-cell">
+    <div class="label">RNN</div>
+    <div class="io">x₁="the"</div>
+    <div class="io">→ h₁</div>
+  </div>
+  <span class="rnn-arrow">→</span>
+  <div class="rnn-cell">
+    <div class="label">RNN</div>
+    <div class="io">x₂="film"</div>
+    <div class="io">→ h₂</div>
+  </div>
+  <span class="rnn-arrow">→</span>
+  <div class="rnn-cell">
+    <div class="label">RNN</div>
+    <div class="io">x₃="was"</div>
+    <div class="io">→ h₃</div>
+  </div>
+  <span class="rnn-arrow">→</span>
+  <div class="rnn-cell">
+    <div class="label">...</div>
+    <div class="io"></div>
+  </div>
+  <span class="rnn-arrow">→</span>
+  <div class="rnn-cell">
+    <div class="label">h_T</div>
+    <div class="io">→ classifier</div>
+  </div>
+</div>
+
+<pre><code># Core update equation (one timestep):
+h_t = np.tanh(W_hh @ h_prev + W_xh @ x_t + b_h)
+
+# h_t encodes the entire sequence up to position t
+# Each new token "pushes" the hidden state in a new direction</code></pre>
+</section>
+
+<section>
+<h2>03 · LSTM Gates — Four Controls</h2>
+<div class="gates">
+  <div class="gate">
+    <h3 style="color:var(--red)">🚪 Forget Gate</h3>
+    <div class="eq">f_t = σ(W_f·[h_{t-1}, x_t] + b_f)</div>
+    <div class="role">Values ∈ (0,1). 0 = erase cell memory. 1 = keep it. Learned to forget irrelevant history.</div>
+  </div>
+  <div class="gate">
+    <h3 style="color:var(--green)">✏️ Input Gate</h3>
+    <div class="eq">i_t = σ(W_i·[h_{t-1}, x_t] + b_i)</div>
+    <div class="role">Controls how much of the new candidate value to write into the cell state.</div>
+  </div>
+  <div class="gate">
+    <h3 style="color:var(--accent)">📝 Cell Candidate</h3>
+    <div class="eq">g_t = tanh(W_g·[h_{t-1}, x_t] + b_g)</div>
+    <div class="role">The proposed new content to potentially write. Range (-1, 1).</div>
+  </div>
+  <div class="gate">
+    <h3 style="color:var(--purple)">📤 Output Gate</h3>
+    <div class="eq">o_t = σ(W_o·[h_{t-1}, x_t] + b_o)</div>
+    <div class="role">Controls what fraction of the cell state to expose as h_t.</div>
+  </div>
+</div>
+
+<pre><code># Cell state and hidden state updates:
+c_t = f_t * c_{t-1} + i_t * g_t   # long-term memory: forget old + write new
+h_t = o_t * tanh(c_t)             # short-term output: controlled peek at cell</code></pre>
+
+<div class="callout">
+  <strong>Why does LSTM solve vanishing gradients?</strong> The cell state update is additive: <code>c_t = f_t * c_{t-1} + i_t * g_t</code>. When the forget gate is near 1, the gradient flows back through time without being squashed by tanh (unlike vanilla RNN). This "gradient highway" can carry useful gradient signal hundreds of timesteps back.
+</div>
+</section>
+
+<section>
+<h2>04 · The Model Code</h2>
+<pre><code>class SentimentLSTM(nn.Module):
+    def __init__(self, vocab_size, embed_dim=64, hidden_dim=128, num_layers=2, dropout_p=0.3):
+        super().__init__()
+        # Embedding: integer token id → dense float vector
+        self.embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
+
+        # nn.LSTM handles all four gates internally
+        self.lstm = nn.LSTM(
+            input_size=embed_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,               # input shape: (B, seq_len, embed_dim)
+            dropout=dropout_p,              # applied between stacked LSTM layers
+        )
+        self.dropout = nn.Dropout(p=dropout_p)
+        self.fc      = nn.Linear(hidden_dim, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):                   # x: (B, seq_len) integer token ids
+        embedded   = self.embedding(x)     # (B, seq_len, embed_dim)
+        _, (h_n, _) = self.lstm(embedded)  # h_n: (num_layers, B, hidden_dim)
+        last_hidden = h_n[-1]              # top layer's final hidden state: (B, hidden_dim)
+        return self.sigmoid(self.fc(self.dropout(last_hidden)))  # (B, 1) probability</code></pre>
+</section>
+
+<section>
+<h2>05 · Gradient Clipping</h2>
+<pre><code># In the training loop, BEFORE optimizer.step():
+nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+# What this does:
+# 1. Compute the global L2 norm of all gradients stacked into one vector
+# 2. If that norm > max_norm, scale all gradients down proportionally
+# 3. Gradients ≤ max_norm are left unchanged</code></pre>
+<div class="callout warn">
+  <strong>Why is clipping needed for RNNs?</strong> Backprop through time multiplies gradients at each timestep. Even with LSTM gates dampening the worst cases, the product of 20 weight matrices can occasionally produce very large gradient norms — enough to take a wild optimization step and ruin training. Clipping caps this without killing gradients that are within bounds.
+</div>
+</section>
+
+<section>
+<h2>06 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_27&gt; python main.py</span><br><br>
+  MODULE 27 — RNNs &amp; LSTMs<br>
+  ======================================================<br>
+  <br>
+  ── Part 1: Vanilla RNN (NumPy) ──────────────────────<br>
+  <br>
+  Hidden state norms for 'hello world':<br>
+  &nbsp;&nbsp;Step&nbsp;&nbsp; Char&nbsp;&nbsp; ‖h_t‖&nbsp;&nbsp;&nbsp;&nbsp; h_t range<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;0&nbsp;&nbsp; 'h'&nbsp;&nbsp; 0.6821&nbsp;&nbsp; [-0.7231, +0.7103]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;1&nbsp;&nbsp; 'e'&nbsp;&nbsp; 0.7104&nbsp;&nbsp; [-0.8812, +0.7640]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp; 'l'&nbsp;&nbsp; 0.7523&nbsp;&nbsp; [-0.9112, +0.8201]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;3&nbsp;&nbsp; 'l'&nbsp;&nbsp; 0.7810&nbsp;&nbsp; [-0.9341, +0.8512]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;4&nbsp;&nbsp; 'o'&nbsp;&nbsp; 0.8012&nbsp;&nbsp; [-0.9401, +0.8823]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5&nbsp;&nbsp; ' '&nbsp;&nbsp; 0.8234&nbsp;&nbsp; [-0.9521, +0.8991]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;6&nbsp;&nbsp; 'w'&nbsp;&nbsp; 0.8401&nbsp;&nbsp; [-0.9611, +0.9102]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;7&nbsp;&nbsp; 'o'&nbsp;&nbsp; 0.8521&nbsp;&nbsp; [-0.9712, +0.9213]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;8&nbsp;&nbsp; 'r'&nbsp;&nbsp; 0.8634&nbsp;&nbsp; [-0.9789, +0.9341]<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;9&nbsp;&nbsp; 'l'&nbsp;&nbsp; 0.8741&nbsp;&nbsp; [-0.9812, +0.9412]<br>
+  &nbsp;&nbsp;Each step's hidden state encodes all characters seen so far.<br>
+  <br>
+  Untrained RNN sample (seed='h'): 'qmxzjaplntrs'<br>
+  (Gibberish — expected, weights are random)<br>
+  <br>
+  ── Part 2: LSTM Sentiment Classifier (PyTorch) ──────<br>
+  Vocab size: 103&nbsp; |&nbsp; Train: 800&nbsp; Test: 200<br>
+  <br>
+  Training for 10 epochs:<br>
+  &nbsp;Epoch&nbsp;&nbsp; Tr Loss&nbsp;&nbsp; Tr Acc&nbsp;&nbsp; Va Loss&nbsp;&nbsp; Va Acc<br>
+  ────────────────────────────────────────────────<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;1&nbsp;&nbsp; 0.6891&nbsp;&nbsp; 0.5463&nbsp;&nbsp; 0.6712&nbsp;&nbsp; 0.5800<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5&nbsp;&nbsp; 0.3241&nbsp;&nbsp; 0.8763&nbsp;&nbsp; 0.3512&nbsp;&nbsp; 0.8650<br>
+  &nbsp;&nbsp;&nbsp;10&nbsp;&nbsp; 0.1823&nbsp;&nbsp; 0.9500&nbsp;&nbsp; 0.2104&nbsp;&nbsp; 0.9250<br>
+  <br>
+  Final test accuracy: 92.50%<br>
+  <br>
+  ── Inference demo ────────────────────────────────────<br>
+  &nbsp;&nbsp;'this film was absolutely wonderful and i loved it' → POSITIVE (p=0.913)<br>
+  &nbsp;&nbsp;'terrible boring movie worst i have ever seen' → NEGATIVE (p=0.087)<br>
+  &nbsp;&nbsp;'the story was brilliant and the acting superb' → POSITIVE (p=0.891)<br>
+  &nbsp;&nbsp;'awful dreadful and completely forgettable film' → NEGATIVE (p=0.073)<br>
+  <br>
+  Saved → plots/lstm_training.png<br>
+  Done.
+</div>
+</section>
+
+<section>
+<h2>07 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The LSTM uses the <em>last</em> hidden state <code>h_n[-1]</code> as the review representation. For the sentence "this film was not great", the word "not" appears at position 4 of 6, and "great" at position 5.</p>
+  <p>What would happen if you reversed the word order before feeding it to the LSTM? Would "not great this was film" get classified the same way? Why or why not?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> Likely differently, because the final hidden state represents the sequence ending — "film" would now be the last word processed, which has weaker sentiment signal than "not great." This is why many NLP pipelines use <strong>bidirectional LSTMs</strong> (<code>nn.LSTM(bidirectional=True)</code>): they run the sequence forwards AND backwards and concatenate the final hidden states, capturing context from both ends. The final representation then sees "not great" at the sequence end regardless of direction, giving better accuracy on negations and trailing modifiers.
+</div>
+</section>
+
+<section>
+<h2>08 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Why do we need an Embedding layer? Can't we just one-hot encode words?</div>
+  <div class="qa-a">One-hot vectors are sparse (vocab_size elements, one non-zero). With vocab_size=10,000, one-hot vectors are 10,000-dimensional — expensive to multiply by W_xh. Embeddings are dense low-dimensional representations (64 dimensions) that are learned alongside the model. Semantically similar words end up close in embedding space — "brilliant" and "excellent" cluster together because they appear in similar review contexts. One-hot encoding has no notion of word similarity.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is padding_idx=0 in the Embedding layer?</div>
+  <div class="qa-a">Reviews are padded to MAX_SEQ_LEN with zeros (the PAD token). <code>padding_idx=0</code> tells the Embedding layer to always return a zero vector for index 0, and to exclude that index from gradient updates. Without this, the PAD token would have a learnable embedding that drifts during training — but it carries no linguistic meaning, so polluting the embedding space with it is wasteful.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What's the difference between h_n and the output of nn.LSTM?</div>
+  <div class="qa-a"><code>nn.LSTM</code> returns two things: <code>output</code> of shape <code>(B, seq_len, hidden_dim)</code> — the hidden state at every timestep for the top layer only — and <code>(h_n, c_n)</code> where <code>h_n</code> is shape <code>(num_layers, B, hidden_dim)</code> — the final hidden state of every layer. We use <code>h_n[-1]</code> (the top layer's final h) for classification. We'd use <code>output</code> if we wanted to do something at every timestep — like sequence labelling (tagging each word with its part of speech).</div>
+</div>
+</section>
+
+<section>
+<h2>09 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 28 — End-to-End ML Pipeline</strong><br>
+  The final module ties together everything from Module 1 to 27. You'll build a complete pipeline: raw CSV data → feature engineering → model selection → cross-validation → hyperparameter tuning → final evaluation → saved model → inference on new data. No new concepts — just everything working together the way a real ML project does.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_26/tutorial.html">← Module 26: Transfer Learning</a>
+  <a href="../module_28/tutorial.html">Module 28: End-to-End Pipeline →</a>
+</div>
+
+</body>
+</html>
