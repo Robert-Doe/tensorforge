@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 25 — Batch Normalisation & Dropout</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  .callout.red{border-color:var(--red)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  /* distribution bars */
+  .dist{display:flex;align-items:flex-end;gap:2px;height:60px;margin:.6rem 0}
+  .bar{background:var(--accent);border-radius:2px 2px 0 0;flex:1;opacity:.8}
+  .dist-label{font-size:.75rem;color:var(--muted);display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 24 (full CNN in PyTorch). Module 25 reuses Module 24's MNIST data directory.</p>
+  <p><strong>Key idea:</strong> Two techniques that almost every real CNN uses: <strong>Batch Normalisation</strong> (stabilises training, allows higher learning rates) and <strong>Dropout</strong> (reduces overfitting). We'll add both to the Module 24 CNN and compare all three variants side-by-side.</p>
+</div>
+</section>
+
+<h1>Module 25 — Batch Normalisation &amp; Dropout</h1>
+<h2>Two techniques Ada uses to stop her junior detectives going rogue</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Recall Ada's junior detectives (conv filters). A problem often emerges during training: some detectives become overconfident — their activation values blow up to the hundreds, overwhelming everyone else's signals. Meanwhile, others shrivel to near-zero and stop contributing. The team becomes unstable. <strong>Batch Normalisation</strong> is Ada's daily standup meeting: before the report goes to senior staff, every junior detective re-centres their confidence to the same scale. Nobody dominates. Nobody is ignored.</p>
+<p><strong>Dropout</strong> is Ada's adversarial training exercise: on random days, she randomly tells 40% of her junior detectives to stay home. The remaining detectives have to cover all the cases. The result? The surviving detectives become less dependent on any single colleague — each one learns to be robust on its own. When everyone shows up for the real case (evaluation), the combined team is more reliable than it would have been without the drills.</p>
+</section>
+
+<section>
+<h2>02 · Batch Normalisation — Mechanics</h2>
+<p>For each batch of activations entering a BN layer:</p>
+<pre><code># For a single feature map (channel c) across all pixels and batch items:
+mu    = mean(activations_c)          # batch mean
+sigma = std(activations_c) + 1e-5   # batch std (epsilon for numerical safety)
+
+# Normalise to zero-mean, unit-variance:
+x_hat = (x - mu) / sigma
+
+# Learn two parameters: scale (gamma) and shift (beta)
+output = gamma * x_hat + beta        # gamma=1, beta=0 at init → pass-through</code></pre>
+
+<p>The learnable <code>gamma</code> and <code>beta</code> let the network undo the normalisation if needed. So BN doesn't force the distribution to always be N(0,1) — it gives the network the <em>option</em> to normalise while still being flexible.</p>
+
+<div class="callout">
+  <strong>At inference time</strong>, BN uses running estimates of mean and variance computed during training (not the current batch's stats). This is why <code>model.train()</code> and <code>model.eval()</code> affect BN behaviour — in eval mode, the frozen running stats are used.
+</div>
+</section>
+
+<section>
+<h2>03 · Where BN Goes in the Stack</h2>
+<table>
+  <tr><th>Order</th><th>Standard for</th><th>Why</th></tr>
+  <tr><td><code>Conv → BN → ReLU</code></td><td>Most CNNs (original BN paper)</td><td>BN normalises raw conv output; ReLU clips the well-centred distribution</td></tr>
+  <tr><td><code>Conv → ReLU → BN</code></td><td>Some older architectures</td><td>Normalises already-clipped (non-negative) values — less effective</td></tr>
+  <tr><td><code>Dense → BN → ReLU</code></td><td>MLP with BN</td><td>Same logic — normalise before activation</td></tr>
+</table>
+
+<pre><code># In forward():
+x = self.pool(F.relu(self.bn1(self.conv1(x))))   # Conv → BN → ReLU → Pool
+x = self.pool(F.relu(self.bn2(self.conv2(x))))   # repeat for second block
+x = x.view(x.size(0), -1)
+x = F.relu(self.bn_fc(self.fc1(x)))              # Dense → BN → ReLU
+x = self.dropout(x)
+x = self.fc2(x)</code></pre>
+</section>
+
+<section>
+<h2>04 · Dropout — Mechanics</h2>
+<pre><code># Training (model.train()):
+mask    = (random_uniform(shape) > p).float()   # 1 with prob (1-p), 0 otherwise
+output  = (input * mask) / (1 - p)              # inverted dropout: scale survivors up
+
+# Inference (model.eval()):
+output  = input                                  # no dropout — all activations pass through</code></pre>
+
+<div class="callout warn">
+  <strong>Inverted dropout is the standard.</strong> By dividing by <code>(1-p)</code> during training, the expected activation magnitude stays the same at train and test time. Without this, you'd need to scale activations by <code>(1-p)</code> at every inference step — easy to forget and a source of silent bugs.
+</div>
+</section>
+
+<section>
+<h2>05 · The Code</h2>
+<pre><code>class DigitCNNwithBN(nn.Module):
+    def __init__(self, dropout_p=0.4):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
+        self.bn1   = nn.BatchNorm2d(16)           # one param pair (gamma,beta) per channel
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
+        self.bn2   = nn.BatchNorm2d(32)
+        self.pool  = nn.MaxPool2d(2, 2)
+        self.fc1     = nn.Linear(32*7*7, 128)
+        self.bn_fc   = nn.BatchNorm1d(128)        # 1d — input is (batch, features) not (B,C,H,W)
+        self.dropout = nn.Dropout(p=dropout_p)
+        self.fc2     = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.bn1(self.conv1(x))))
+        x = self.pool(F.relu(self.bn2(self.conv2(x))))
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.bn_fc(self.fc1(x)))
+        x = self.dropout(x)
+        return F.log_softmax(self.fc2(x), dim=1)</code></pre>
+
+<div class="callout">
+  <strong>BatchNorm2d vs BatchNorm1d:</strong> <code>BatchNorm2d</code> expects input of shape <code>(batch, channels, H, W)</code> — one gamma/beta per channel. <code>BatchNorm1d</code> expects <code>(batch, features)</code> — one gamma/beta per feature. Using the wrong one raises a shape mismatch error immediately.
+</div>
+</section>
+
+<section>
+<h2>06 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_25&gt; python main.py</span><br><br>
+  MODULE 25 — BatchNorm + Dropout (MNIST ablation)<br>
+  ====================================================<br>
+  Device: cpu<br>
+  <br>
+  ──────────────────────────────────────────────────<br>
+  Experiment: Baseline (no BN)<br>
+  ──────────────────────────────────────────────────<br>
+  &nbsp;Epoch &nbsp; Tr Loss &nbsp;&nbsp; Tr Acc &nbsp;&nbsp; Va Loss &nbsp;&nbsp; Va Acc<br>
+  ──────────────────────────────────────────────────<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;1 &nbsp;&nbsp;0.1791 &nbsp;&nbsp; 0.9461 &nbsp;&nbsp; 0.0619 &nbsp;&nbsp; 0.9808<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5 &nbsp;&nbsp;0.0296 &nbsp;&nbsp; 0.9909 &nbsp;&nbsp; 0.0318 &nbsp;&nbsp; 0.9901<br>
+  <br>
+  Experiment: BN only<br>
+  ──────────────────────────────────────────────────<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;1 &nbsp;&nbsp;0.1034 &nbsp;&nbsp; 0.9685 &nbsp;&nbsp; 0.0481 &nbsp;&nbsp; 0.9852<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5 &nbsp;&nbsp;0.0138 &nbsp;&nbsp; 0.9958 &nbsp;&nbsp; 0.0296 &nbsp;&nbsp; 0.9916<br>
+  <br>
+  Experiment: BN + Dropout=0.4<br>
+  ──────────────────────────────────────────────────<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;1 &nbsp;&nbsp;0.1287 &nbsp;&nbsp; 0.9601 &nbsp;&nbsp; 0.0441 &nbsp;&nbsp; 0.9862<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5 &nbsp;&nbsp;0.0189 &nbsp;&nbsp; 0.9942 &nbsp;&nbsp; 0.0258 &nbsp;&nbsp; 0.9924<br>
+  <br>
+  Final test accuracy summary:<br>
+  &nbsp;&nbsp;Baseline (no BN) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 99.01%<br>
+  &nbsp;&nbsp;BN only &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 99.16%<br>
+  &nbsp;&nbsp;BN + Dropout=0.4 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 99.24%<br>
+  <br>
+  Batch Norm effect on conv1 activations:<br>
+  &nbsp;&nbsp;Before BN: mean=+0.2841&nbsp; std=0.8231<br>
+  &nbsp;&nbsp;After&nbsp; BN: mean=+0.0003&nbsp; std=0.9998<br>
+  &nbsp;&nbsp;→ BN re-centres activations near 0 and rescales to unit variance.<br>
+  <br>
+  Saved → plots/bn_dropout_comparison.png<br>
+  Done.
+</div>
+</section>
+
+<section>
+<h2>07 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>Batch Normalisation introduces extra learnable parameters: one <code>gamma</code> and one <code>beta</code> per channel. For the BN layers in <code>DigitCNNwithBN</code>:</p>
+  <ul style="margin-left:1.5rem">
+    <li><code>bn1</code>: 16 channels</li>
+    <li><code>bn2</code>: 32 channels</li>
+    <li><code>bn_fc</code>: 128 features</li>
+  </ul>
+  <p style="margin-top:.8rem">How many total BN parameters does the model add? Is it worth it?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> Each BN layer has 2 parameters per unit (gamma + beta). Total BN params:<br>
+  bn1 = 2×16 = 32 &nbsp;|&nbsp; bn2 = 2×32 = 64 &nbsp;|&nbsp; bn_fc = 2×128 = 256 &nbsp;|&nbsp; <strong>Total = 352</strong><br><br>
+  The baseline model has 206,922 parameters. BN adds 352 (0.17%). For a 0.23 percentage-point accuracy gain (99.01% → 99.24%), that's a very good trade. In larger networks the accuracy gain from BN is often 2–5% because it enables a 10× higher learning rate, dramatically faster convergence.
+</div>
+</section>
+
+<section>
+<h2>08 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Why does BN behave differently in train vs eval mode?</div>
+  <div class="qa-a">During training, BN normalises using the <em>current batch's</em> mean and variance. Each batch is different, so BN adds a form of stochastic regularisation (similar to Dropout). During evaluation you want deterministic predictions, so BN uses <em>running averages</em> of mean and variance accumulated during training — a stable estimate of the population statistics. Calling <code>model.eval()</code> switches this automatically; forgetting it can cause wildly inconsistent test scores.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What happens if the batch size is 1 with BatchNorm?</div>
+  <div class="qa-a"><code>BatchNorm2d</code> computes statistics over the batch dimension. With batch_size=1, the variance of a single sample is 0 — division by zero (plus epsilon). The result is numerically unstable and practically useless. For batch_size=1 (common in RNNs processing one timestep, or online inference), use <strong>Layer Normalisation</strong> (<code>nn.LayerNorm</code>) instead, which normalises across features rather than across the batch.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Should Dropout come before or after BN?</div>
+  <div class="qa-a">Conventionally: BN before Dropout. BN uses the full batch statistics (before dropout zeroes some activations); if dropout came first, BN would compute statistics on a randomly masked batch — inconsistent statistics between train and eval. Putting Dropout after BN ensures BN sees the full, un-masked distribution. Some recent papers argue the order matters less than commonly assumed, but BN → Dropout is the safe default.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: In the terminal output, "Before BN: std=0.82" — isn't that already close to 1?</div>
+  <div class="qa-a">After just one epoch of Adam training, weights have already started converging, so activations happen to be nearly unit-variance for this particular model. Early in training (epoch 0, random weights) or in deeper networks, the pre-BN std can be 5–50×. The bigger benefit of BN is preventing those large deviations from happening in the first place — it keeps activations in a stable range throughout training, so the learning rate doesn't need to be tuned per layer.</div>
+</div>
+</section>
+
+<section>
+<h2>09 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 26 — Transfer Learning</strong><br>
+  Training from scratch requires a lot of data and compute. Transfer learning lets you reuse a network pre-trained on millions of images (e.g. ImageNet) and fine-tune only the final layer for your task. You'll load a pretrained ResNet-18, freeze the convolutional backbone, replace the head, and train to classify a small custom dataset in minutes rather than hours.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_24/tutorial.html">← Module 24: Full CNN</a>
+  <a href="../module_26/tutorial.html">Module 26: Transfer Learning →</a>
+</div>
+
+</body>
+</html>
