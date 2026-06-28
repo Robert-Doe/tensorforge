@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 21 — Overfitting & Regularisation</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.red{border-color:var(--red)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 20 (mini-batch training loop). The RegularisedMLP wraps the same layer abstraction from M18 — make sure you understand DenseLayer.forward() and backward().</p>
+</div>
+</section>
+
+<h1>Module 21 — Overfitting &amp; Regularisation</h1>
+<h2>When Ada memorises cases instead of learning patterns</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Ada studied 78 past cases so hard she memorised every detail — the suspect's exact age, the precise number of witnesses, the specific location. On those 78 cases she's perfect. But a new case comes in and she fails — it doesn't match any past case exactly.</p>
+<p>She <strong>overfitted</strong> to the training data. She learned noise and quirks instead of general patterns.</p>
+<p>Two cures:</p>
+<ul style="margin-left:1.5rem;margin-bottom:1rem">
+  <li><strong>L2 Regularisation</strong>: "Ada, don't obsess over any single piece of evidence. Keep all your confidence levels moderate." (Penalty for large weights.)</li>
+  <li><strong>Dropout</strong>: "Ada, every day we randomly assign half your team to desk duties. Train with whichever half shows up." (Forces redundancy — no neuron can become indispensable.)</li>
+</ul>
+</section>
+
+<section>
+<h2>02 · Diagnosing Overfitting</h2>
+<pre><code># The smoking gun: training loss keeps falling, val loss rises
+Epoch  50:  train_loss=0.42  val_loss=0.58   ← diverging
+Epoch 100:  train_loss=0.31  val_loss=0.67   ← definitely overfitting
+Epoch 200:  train_loss=0.19  val_loss=0.79   ← memorising noise</code></pre>
+
+<table>
+  <tr><th>Scenario</th><th>Train acc</th><th>Val acc</th><th>Diagnosis</th></tr>
+  <tr><td>Both low</td><td>60%</td><td>58%</td><td>Underfitting — model too simple or too few epochs</td></tr>
+  <tr><td>Both high</td><td>82%</td><td>80%</td><td>Generalising well ✓</td></tr>
+  <tr><td>Big gap</td><td>95%</td><td>65%</td><td>Overfitting — model too complex for data size</td></tr>
+</table>
+</section>
+
+<section>
+<h2>03 · L2 Regularisation (Weight Decay)</h2>
+<p>Add a penalty term to the loss that grows with the squared magnitude of the weights:</p>
+<pre><code>regularised_loss = loss + (lambda / 2) * sum(W^2)
+
+# Gradient of the penalty w.r.t. W:
+d/dW [lambda/2 * W^2] = lambda * W
+
+# So in backward(), just add lambda * W to dW:
+layer.dW += l2_lambda * layer.W   # weight decay step
+
+# Effect: large weights are pulled toward zero every update</code></pre>
+
+<div class="callout">
+  <strong>Intuition:</strong> L2 says "if two explanations fit the data equally well, prefer the simpler one (smaller weights)." It's Occam's Razor built into the loss function.
+</div>
+</section>
+
+<section>
+<h2>04 · Dropout</h2>
+<pre><code>class DropoutLayer:
+    def forward(self, X):
+        if not self.training:
+            return X   # no dropout at inference
+
+        # Each neuron kept with probability (1-p)
+        mask = (rng.random(X.shape) >= self.p).astype(float)
+
+        # Inverted dropout: scale up to keep expected value the same
+        return X * mask / (1.0 - self.p)
+
+    def backward(self, dOut):
+        if not self.training:
+            return dOut
+        return dOut * mask / (1.0 - self.p)   # same mask as forward</code></pre>
+
+<div class="callout warn">
+  <strong>Always call model._set_training(False) before predict().</strong> If dropout stays active at inference, your predictions are random — literally different every call. Every framework has a model.eval() / model.train() toggle for this reason.
+</div>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_21&gt; python main.py</span><br><br>
+MODULE 21 — Overfitting &amp; Regularisation<br>
+====================================================<br>
+Train: 78  Val: 18  Test: 24<br>
+<br>
+Config                   Train     Val    Test<br>
+------------------------------------------------<br>
+&nbsp;&nbsp;No regularisation        0.949   0.611   0.625<br>
+&nbsp;&nbsp;L2 λ=0.01                0.821   0.722   0.708<br>
+&nbsp;&nbsp;Dropout p=0.3            0.808   0.722   0.708<br>
+&nbsp;&nbsp;L2 + Dropout             0.795   0.750   0.750<br>
+<br>
+Saved → plots/regularisation_loss.png
+</div>
+
+<div class="callout">
+  <strong>Reading the table:</strong> No regularisation → train 95%, test 63% (massive gap = overfitting). L2 + Dropout → train 80%, test 75% (gap closed, generalisation improved). The regularised model is "worse" on training data but <em>better</em> at the actual job.
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>Why does dropout help with overfitting even though it seems to make training noisier and harder?</p>
+  <p>Hint: think about what a neuron learns when it can't rely on any specific other neuron always being present.</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> When neurons are randomly dropped, no single neuron can afford to specialise in memorising one specific training example — it might not be present for the next update. Each neuron must learn features that are useful <em>in combination with any random subset</em> of other neurons. This forces the network to learn multiple redundant representations of the same pattern, which generalise much better to unseen data. Dropout is essentially training an exponential ensemble of sub-networks and averaging their predictions at inference.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: What dropout probability should I use?</div>
+  <div class="qa-a">Common defaults: p=0.5 for large hidden layers, p=0.2 for smaller layers or near the output. Avoid high dropout (p>0.6) — it makes training very slow and noisy. Never apply dropout to the output layer. If validation loss doesn't improve with dropout, try reducing p or removing it entirely.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is L1 regularisation and when is it better than L2?</div>
+  <div class="qa-a">L1 adds lambda * sum(|W|) instead of lambda/2 * sum(W²). The key difference: L1 produces sparse weights (many exactly zero), L2 produces small-but-nonzero weights. L1 is better when you suspect many features are irrelevant and want automatic feature selection. L2 is better when all features contribute something. In neural networks, L2 (weight decay) is used almost universally.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What other regularisation techniques exist beyond L2 and Dropout?</div>
+  <div class="qa-a">Data augmentation (artificially expand training data), early stopping (stop when val_loss plateaus), batch normalisation (M25 — stabilises training and has implicit regularisation effect), label smoothing (soften hard 0/1 targets), and DropConnect (drop individual weights rather than neurons). In practice, data augmentation + dropout + early stopping cover most real scenarios.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 22 — PyTorch Intro</strong><br>
+  You've built everything from scratch: neurons, backprop, multi-layer nets, dropout, L2. Now watch PyTorch do it all in 20 lines. More importantly: you'll understand <em>exactly</em> what torch.nn.Linear, torch.nn.Dropout, model.train(), model.eval(), and loss.backward() are doing — because you wrote them yourself first.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_20/tutorial.html">← Module 20: Training Loops</a>
+  <a href="../module_22/tutorial.html">Module 22: PyTorch →</a>
+</div>
+
+</body>
+</html>
