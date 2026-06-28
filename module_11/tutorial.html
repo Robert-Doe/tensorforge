@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 11 — SVMs</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  /* SVM margin diagram */
+  .margin-diagram{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;text-align:center}
+  .margin-diagram svg{max-width:500px;width:100%}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 10 (sklearn basics). The key new concept: feature scaling is <em>mandatory</em> for SVMs.</p>
+  <p><strong>Install:</strong> <code>pip install scikit-learn==1.5.0</code> (already done in M10)</p>
+</div>
+</section>
+
+<h1>Module 11 — Support Vector Machines</h1>
+<h2>Don't just find a line — find the <em>widest</em> line</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Detective Ada is drawing a chalk line on the floor to separate "solved" cases (left pile) from "unsolved" cases (right pile). There are infinitely many lines that correctly separate the piles.</p>
+<p>Most detectives draw any line that works. SVM says: <em>find the line that is as far as possible from both piles simultaneously.</em> That gap is called the <strong>margin</strong>. A wider margin means the line is less sensitive to noise — move a few cases slightly and the boundary still holds.</p>
+
+<div class="margin-diagram">
+<svg viewBox="0 0 480 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- dots: class 0 (unsolved) -->
+  <circle cx="80"  cy="80"  r="8" fill="#58a6ff" opacity=".85"/>
+  <circle cx="100" cy="140" r="8" fill="#58a6ff" opacity=".85"/>
+  <circle cx="60"  cy="170" r="8" fill="#58a6ff" opacity=".85"/>
+  <circle cx="120" cy="60"  r="8" fill="#58a6ff" opacity=".85"/>
+  <circle cx="50"  cy="110" r="8" fill="#58a6ff" opacity=".85"/>
+  <!-- dots: class 1 (solved) -->
+  <circle cx="340" cy="70"  r="8" fill="#3fb950" opacity=".85"/>
+  <circle cx="380" cy="130" r="8" fill="#3fb950" opacity=".85"/>
+  <circle cx="360" cy="180" r="8" fill="#3fb950" opacity=".85"/>
+  <circle cx="400" cy="60"  r="8" fill="#3fb950" opacity=".85"/>
+  <circle cx="420" cy="150" r="8" fill="#3fb950" opacity=".85"/>
+  <!-- support vectors (circled) -->
+  <circle cx="120" cy="60"  r="12" fill="none" stroke="#d29922" stroke-width="2"/>
+  <circle cx="340" cy="70"  r="12" fill="none" stroke="#d29922" stroke-width="2"/>
+  <!-- margin band -->
+  <line x1="200" y1="20" x2="200" y2="220" stroke="#58a6ff" stroke-width="1" stroke-dasharray="6,4" opacity=".5"/>
+  <line x1="240" y1="20" x2="240" y2="220" stroke="#3fb950" stroke-width="1" stroke-dasharray="6,4" opacity=".5"/>
+  <!-- decision boundary -->
+  <line x1="220" y1="20" x2="220" y2="220" stroke="#e6edf3" stroke-width="2"/>
+  <!-- labels -->
+  <text x="220" y="14" fill="#e6edf3" font-size="11" text-anchor="middle">Decision boundary</text>
+  <text x="190" y="235" fill="#58a6ff" font-size="11" text-anchor="middle">margin</text>
+  <text x="250" y="235" fill="#3fb950" font-size="11" text-anchor="middle">margin</text>
+  <text x="75"  y="210" fill="#58a6ff" font-size="12">Unsolved</text>
+  <text x="350" y="210" fill="#3fb950" font-size="12">Solved</text>
+  <text x="115" y="42"  fill="#d29922" font-size="10">support</text>
+  <text x="115" y="53"  fill="#d29922" font-size="10">vector</text>
+  <text x="335" y="52"  fill="#d29922" font-size="10">support</text>
+  <text x="335" y="63"  fill="#d29922" font-size="10">vector</text>
+  <!-- margin arrows -->
+  <line x1="200" y1="120" x2="240" y2="120" stroke="#e6edf3" stroke-width="1" marker-end="url(#arr)"/>
+  <text x="220" y="115" fill="#e6edf3" font-size="10" text-anchor="middle">margin</text>
+  <defs>
+    <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#e6edf3"/>
+    </marker>
+  </defs>
+</svg>
+<p style="color:var(--muted);font-size:.85rem;margin-top:.5rem">Gold circles = support vectors — the only training points that matter</p>
+</div>
+</section>
+
+<section>
+<h2>02 · The C Parameter — Margin Width vs. Error Tolerance</h2>
+<table>
+  <tr><th>C value</th><th>Margin</th><th>Errors allowed</th><th>Risk</th></tr>
+  <tr><td>Very small (0.01)</td><td>Wide</td><td>Many</td><td>Underfitting — too simple</td></tr>
+  <tr><td>1 (default)</td><td>Medium</td><td>Some</td><td>Usually balanced</td></tr>
+  <tr><td>Very large (100)</td><td>Narrow</td><td>Almost none</td><td>Overfitting — memorises training data</td></tr>
+</table>
+<pre><code># Small C: wider margin, tolerates some misclassification
+Pipeline([("scaler", StandardScaler()), ("svm", SVC(kernel="linear", C=0.01))])
+
+# Large C: narrower margin, tries to classify everything correctly
+Pipeline([("scaler", StandardScaler()), ("svm", SVC(kernel="linear", C=100))])</code></pre>
+</section>
+
+<section>
+<h2>03 · The Kernel Trick</h2>
+<p>What if the data isn't linearly separable? SVM maps the data into a higher-dimensional space where a flat hyperplane can still separate the classes. The <strong>kernel function</strong> computes the dot product in that high-dimensional space without actually going there.</p>
+
+<table>
+  <tr><th>Kernel</th><th>When to use</th><th>Key hyperparameter</th></tr>
+  <tr><td><code>linear</code></td><td>Linearly separable, high-dimensional data</td><td>C only</td></tr>
+  <tr><td><code>rbf</code></td><td>Non-linear boundaries (most real problems)</td><td>C + gamma</td></tr>
+  <tr><td><code>poly</code></td><td>Polynomial relationships in data</td><td>C + degree</td></tr>
+</table>
+
+<pre><code># RBF kernel SVM — handles curved decision boundaries
+Pipeline([
+    ("scaler", StandardScaler()),
+    ("svm", SVC(kernel="rbf", C=1.0, gamma="scale", probability=True))
+])</code></pre>
+
+<div class="callout warn">
+  <strong>gamma="scale"</strong> sets gamma = 1 / (n_features × X.var()). This is almost always the right default. Never use gamma="auto" on modern sklearn — it's less well-calibrated.
+</div>
+</section>
+
+<section>
+<h2>04 · Why Scaling is Mandatory</h2>
+<pre><code># Wrong — SVM sees features on wildly different scales
+svm = SVC()
+svm.fit(X_train, y_train)   # evidence_score (0-10) vs days_open (0-365)
+
+# Right — scale first, then fit
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+model = Pipeline([
+    ("scaler", StandardScaler()),   # makes every feature mean=0, std=1
+    ("svm",    SVC()),
+])
+model.fit(X_train, y_train)   # scaler fits only on X_train (no leakage)</code></pre>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_11&gt; python main.py</span><br><br>
+MODULE 11 — Support Vector Machines<br>
+====================================================<br>
+<br>
+Linear SVM (C=1.0)<br>
+&nbsp;&nbsp;Accuracy : 0.750<br>
+&nbsp;&nbsp;ROC-AUC  : 0.801<br>
+<br>
+RBF SVM (C=1.0, gamma=scale)<br>
+&nbsp;&nbsp;Accuracy : 0.750<br>
+&nbsp;&nbsp;ROC-AUC  : 0.808<br>
+<br>
+RBF support vectors per class: [18 14]  (total 32)<br>
+&nbsp;&nbsp;Only these 32 training samples define the decision boundary.<br>
+<br>
+=== C-Sweep: margin width vs. accuracy ===<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C  Linear CV    RBF CV<br>
+----------------------------------<br>
+&nbsp;&nbsp;0.010  0.650±0.04  0.642±0.05<br>
+&nbsp;&nbsp;0.100  0.725±0.04  0.717±0.04<br>
+&nbsp;&nbsp;1.000  0.750±0.04  0.750±0.04<br>
+&nbsp;&nbsp;10.00  0.742±0.05  0.750±0.04<br>
+&nbsp;&nbsp;100.0  0.725±0.06  0.742±0.05<br>
+<br>
+Saved → plots/svm_c_sweep.png
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>Look at the C-sweep output. At C=0.01, accuracy is low. At C=100, accuracy is also lower than C=1. What's happening at each extreme?</p>
+  <p><em>Draw the margin for each case. What does a very wide margin mean for the kinds of errors the model makes?</em></p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> At C=0.01 the margin is so wide it ignores many training samples — underfitting, high bias. At C=100 the margin is so narrow it fits the training data precisely but doesn't generalise — overfitting, high variance. C=1 hits the sweet spot for this dataset. This bias-variance trade-off exists in every ML algorithm; SVM just makes it unusually visible through the margin metaphor.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Why are only some training points called "support vectors"?</div>
+  <div class="qa-a">The optimal margin is fully defined by the points closest to the boundary — the support vectors. All other training points could be removed and the boundary wouldn't change. This makes SVMs memory-efficient: only the support vectors are stored after training.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Does the RBF kernel always beat the linear kernel?</div>
+  <div class="qa-a">No. If the data is truly linearly separable (or nearly so), the linear kernel is faster and more interpretable. The RBF kernel only wins when there are curved boundaries in the data. On high-dimensional sparse data (like text), linear SVMs often win because the feature space is already rich enough.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: SVM seemed slower to train than LogisticRegression. Why?</div>
+  <div class="qa-a">Logistic regression uses gradient descent on the full dataset in each iteration. SVM solves a quadratic programming problem that scales roughly O(n²) to O(n³) with number of samples. For large datasets (>100k samples), use LinearSVC or SGDClassifier(loss='hinge') instead.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Why do we need probability=True if we just want class predictions?</div>
+  <div class="qa-a">You don't — if you only call predict(), drop probability=True and training is 2x faster. Add it only when you need predict_proba() for ROC-AUC or calibrated confidence scores.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 12 — Random Forests &amp; Boosting</strong><br>
+  One decision tree overfits. What if you trained 100 trees on random subsets of data and features, then took a vote? That's a Random Forest — and it's almost always more accurate than any single tree. Then we go further: what if each tree focused on the mistakes of the previous one? That's boosting, and it's the algorithm behind many Kaggle winners.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_10/tutorial.html">← Module 10: Scikit-learn</a>
+  <a href="../module_12/tutorial.html">Module 12: Random Forests →</a>
+</div>
+
+</body>
+</html>
