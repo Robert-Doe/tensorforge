@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 22 — PyTorch Intro</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border);font-size:.9rem}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0}
+  .scratch-box{background:#1a1a2e;border:1px solid #3d3d6b;border-radius:8px;padding:.8rem}
+  .torch-box{background:#1a2e1a;border:1px solid #3b6b3b;border-radius:8px;padding:.8rem}
+  .tag{display:inline-block;padding:.1rem .5rem;border-radius:4px;font-size:.75rem;font-weight:700;margin-bottom:.4rem}
+  .tag.scratch{background:#3d3d6b;color:#aaaaff}
+  .tag.torch{background:#3b6b3b;color:var(--green)}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Modules 16-21. Every PyTorch concept in this module has a direct scratch equivalent you already built.</p>
+  <p><strong>Install PyTorch:</strong></p>
+  <pre><code>pip install torch==2.3.0</code></pre>
+  <p>For GPU support, visit pytorch.org for the CUDA-enabled install command.</p>
+</div>
+</section>
+
+<h1>Module 22 — PyTorch Intro</h1>
+<h2>The same detective agency, now with professional tools</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>You spent six modules building a detective agency from hand-wired circuits — every switch, every wire, every signal path. You now understand exactly how it works.</p>
+<p>The police department just handed you a <strong>professional radio system</strong>. Same frequencies, same protocols — but pre-built, battle-tested, and optimised by thousands of engineers. You don't have to give up your understanding. You use it to interpret every knob and button.</p>
+<p>That's PyTorch. Every module and method maps to something you already built.</p>
+</section>
+
+<section>
+<h2>02 · The Mapping Table</h2>
+<table>
+  <tr><th>Scratch (M16–M21)</th><th>PyTorch equivalent</th></tr>
+  <tr><td><code>DenseLayer(n_in, n_out)</code></td><td><code>nn.Linear(n_in, n_out)</code></td></tr>
+  <tr><td><code>ReLULayer()</code></td><td><code>nn.ReLU()</code></td></tr>
+  <tr><td><code>SigmoidLayer()</code></td><td><code>nn.Sigmoid()</code></td></tr>
+  <tr><td><code>DropoutLayer(p)</code></td><td><code>nn.Dropout(p)</code></td></tr>
+  <tr><td><code>BinaryCrossEntropyLoss()</code></td><td><code>nn.BCELoss()</code></td></tr>
+  <tr><td><code>MLP.backward(probs, y)</code></td><td><code>loss.backward()</code></td></tr>
+  <tr><td><code>MLP._update_weights()</code></td><td><code>optimizer.step()</code></td></tr>
+  <tr><td><code>model._set_training(True)</code></td><td><code>model.train()</code></td></tr>
+  <tr><td><code>model._set_training(False)</code></td><td><code>model.eval()</code></td></tr>
+  <tr><td><code>l2_lambda * dl.W</code> added in backward</td><td><code>weight_decay=0.005</code> in optimizer</td></tr>
+</table>
+</section>
+
+<section>
+<h2>03 · The Model</h2>
+<div class="compare">
+  <div class="scratch-box"><span class="tag scratch">SCRATCH — M21</span>
+<pre style="margin:0;border:none;background:none;padding:0;font-size:.8rem"><code>class RegularisedMLP:
+  def __init__(self, n_in, hidden,
+               dropout_p):
+    self.layers = []
+    for i in range(len(sizes)-1):
+      self.layers.append(
+        DenseLayer(sizes[i], sizes[i+1]))
+      self.layers.append(ReLULayer())
+      self.layers.append(
+        DropoutLayer(dropout_p))
+    self.layers.append(
+      DenseLayer(sizes[-1], 1))
+    self.layers.append(SigmoidLayer())</code></pre>
+  </div>
+  <div class="torch-box"><span class="tag torch">PYTORCH — M22</span>
+<pre style="margin:0;border:none;background:none;padding:0;font-size:.8rem"><code>class DetectiveMLP(nn.Module):
+  def __init__(self, n_in, hidden,
+               dropout_p):
+    super().__init__()
+    layers = []
+    for i in range(len(sizes)-1):
+      layers.append(
+        nn.Linear(sizes[i], sizes[i+1]))
+      layers.append(nn.ReLU())
+      layers.append(
+        nn.Dropout(dropout_p))
+    layers.append(nn.Linear(sizes[-1],1))
+    layers.append(nn.Sigmoid())
+    self.net = nn.Sequential(*layers)</code></pre>
+  </div>
+</div>
+</section>
+
+<section>
+<h2>04 · The Training Loop</h2>
+<pre><code>criterion = nn.BCELoss()
+optimizer = optim.SGD(model.parameters(), lr=0.05,
+                      weight_decay=0.005, momentum=0.9)
+
+for epoch in range(EPOCHS):
+    model.train()                     # activates Dropout
+    for X_batch, y_batch in loader:
+        optimizer.zero_grad()         # ← NEVER forget this — clears old gradients
+        preds = model(X_batch)        # forward pass
+        loss  = criterion(preds, y_batch)
+        loss.backward()               # autograd computes all gradients
+        optimizer.step()              # updates all weights
+
+    model.eval()
+    with torch.no_grad():             # disables gradient tracking
+        val_preds = model(X_val)
+        val_loss  = criterion(val_preds, y_val)</code></pre>
+
+<div class="callout warn">
+  <strong>optimizer.zero_grad() must come before loss.backward().</strong> PyTorch <em>accumulates</em> gradients by default — if you forget to zero them, each step's gradients pile on top of the last, causing wildly incorrect weight updates. This is a top-3 PyTorch bug for beginners.
+</div>
+</section>
+
+<section>
+<h2>05 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_22&gt; python main.py</span><br><br>
+MODULE 22 — PyTorch Intro<br>
+====================================================<br>
+PyTorch version: 2.3.0<br>
+Train: 78  Val: 18  Test: 24<br>
+<br>
+Model architecture:<br>
+&nbsp;&nbsp;net.0.weight                   shape=[16, 6]  params=96<br>
+&nbsp;&nbsp;net.0.bias                     shape=[16]     params=16<br>
+&nbsp;&nbsp;net.3.weight                   shape=[8, 16]  params=128<br>
+&nbsp;&nbsp;net.3.bias                     shape=[8]      params=8<br>
+&nbsp;&nbsp;net.6.weight                   shape=[1, 8]   params=8<br>
+&nbsp;&nbsp;net.6.bias                     shape=[1]      params=1<br>
+&nbsp;&nbsp;TOTAL                                         params=257<br>
+<br>
+Training (SGD + momentum + L2 + Dropout):<br>
+&nbsp;&nbsp;Epoch  30/150  train=0.6214  val=0.6511<br>
+&nbsp;&nbsp;Epoch  60/150  train=0.5741  val=0.5973<br>
+&nbsp;&nbsp;Epoch  90/150  train=0.5381  val=0.5628<br>
+&nbsp;&nbsp;Epoch 120/150  train=0.5172  val=0.5441<br>
+&nbsp;&nbsp;Epoch 150/150  train=0.5011  val=0.5319<br>
+<br>
+Final accuracy — train=0.782  val=0.722  test=0.750<br>
+<br>
+=== Comparison: Scratch vs PyTorch ===<br>
+&nbsp;&nbsp;NumPy MLP + L2 + Dropout         ~0.750  (M21)<br>
+&nbsp;&nbsp;PyTorch MLP + L2 + Dropout        0.750  (M22)<br>
+&nbsp;&nbsp;Same algorithm. Same results. 10x less code.<br>
+<br>
+Saved → plots/pytorch_loss.png
+</div>
+</section>
+
+<section>
+<h2>06 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>What happens if you remove <code>optimizer.zero_grad()</code> from the training loop and run for 10 epochs? Would the model converge faster, slower, or diverge?</p>
+  <p>Try it — add a comment and run. Observe the loss curve.</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> Gradients accumulate: the gradient at step 2 is the sum of step 1's and step 2's gradients. Effective learning rate grows unbounded over epochs. On a small dataset with a well-behaved loss surface this might still converge (just with a much larger effective step size), but on most real tasks it diverges quickly — loss spikes upward as weight updates become catastrophically large.
+</div>
+</section>
+
+<section>
+<h2>07 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: What is autograd and how does PyTorch know what gradients to compute?</div>
+  <div class="qa-a">Every PyTorch tensor operation is recorded in a dynamic computation graph. When you call loss.backward(), PyTorch traverses this graph in reverse (from loss back to every parameter), applying the chain rule at each node. This is why intermediate tensors don't need to be manually saved (as we did with self._cache in M17-M18) — the graph records everything automatically.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is optim.Adam and when should I use it instead of SGD?</div>
+  <div class="qa-a">Adam (Adaptive Moment Estimation) keeps a running average of both gradients and squared gradients, giving each weight its own adaptive learning rate. It converges in far fewer epochs than SGD on most tasks. Use Adam as the default for neural networks unless you have a specific reason (e.g., reproducing a paper that used SGD). Starting learning rate: 1e-3 for Adam, 0.01-0.1 for SGD.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What does .item() do on a tensor?</div>
+  <div class="qa-a">It extracts the scalar value from a 0-dimensional tensor as a Python float. Necessary for logging — if you append the tensor itself to a list, PyTorch keeps the entire computation graph alive in memory. Calling .item() extracts just the number and allows the graph to be freed.</div>
+</div>
+</section>
+
+<section>
+<h2>08 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 23 — Convolutional Layer from Scratch</strong><br>
+  Everything so far flattens input into a 1-D vector. But images have spatial structure — a pixel is related to its neighbours, not to a pixel on the other side of the image. A convolutional layer slides a small filter across the image, detecting local patterns (edges, corners, textures). Module 23 implements 2D convolution in NumPy before Module 24 builds a full CNN in PyTorch.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_21/tutorial.html">← Module 21: Regularisation</a>
+  <a href="../module_23/tutorial.html">Module 23: Conv Layer →</a>
+</div>
+
+</body>
+</html>
