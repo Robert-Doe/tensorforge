@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 18 — Multi-Layer Network</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  .xor-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin:1rem 0;text-align:center}
+  .xor-cell{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.6rem;font-size:.9rem}
+  .xor-cell.true{border-color:var(--green)}
+  .xor-cell.false{border-color:var(--red)}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 17 (backpropagation). You need to understand what dZ2 = A2 - y means and why we multiply by W.T to propagate gradients backward.</p>
+  <p><strong>New concept:</strong> The <strong>layer abstraction</strong> — each layer object owns its weights, computes its own forward and backward, and the MLP just loops over them.</p>
+</div>
+</section>
+
+<h1>Module 18 — Multi-Layer Network from Scratch</h1>
+<h2>Stacking departments: when one detective brain isn't enough</h2>
+
+<section>
+<h2>01 · The Big Analogy — XOR</h2>
+<p>Here's a case Ada can't solve alone: a crime happens when <em>exactly one</em> of two suspects is present — not both, not neither. That's XOR.</p>
+
+<div class="xor-grid">
+  <div class="xor-cell"><strong>A</strong></div>
+  <div class="xor-cell"><strong>B</strong></div>
+  <div class="xor-cell"><strong>A XOR B</strong></div>
+  <div class="xor-cell"><strong>Linear?</strong></div>
+  <div class="xor-cell false">0</div><div class="xor-cell false">0</div><div class="xor-cell false">0</div><div class="xor-cell">✗</div>
+  <div class="xor-cell false">0</div><div class="xor-cell true">1</div><div class="xor-cell true">1</div><div class="xor-cell">✗</div>
+  <div class="xor-cell true">1</div><div class="xor-cell false">0</div><div class="xor-cell true">1</div><div class="xor-cell">✗</div>
+  <div class="xor-cell true">1</div><div class="xor-cell true">1</div><div class="xor-cell false">0</div><div class="xor-cell">✗</div>
+</div>
+
+<p>You cannot draw a single straight line that separates the 1s from the 0s. A single neuron (logistic regression) can never achieve 100% accuracy on XOR. But a network with one hidden layer can — it learns a non-linear boundary.</p>
+</section>
+
+<section>
+<h2>02 · The Layer Abstraction</h2>
+<p>Instead of writing one giant forward/backward function, each layer is responsible for its own computation:</p>
+<pre><code>class DenseLayer:
+    def forward(self, X):
+        self._cache = X            # save for backward
+        return X @ self.W + self.b
+
+    def backward(self, dOut):
+        self.dW = self._cache.T @ dOut / n   # weight gradient
+        self.db = dOut.mean(axis=0)
+        return dOut @ self.W.T    # pass gradient further back
+
+class ReLULayer:
+    def forward(self, X):
+        self._cache = X
+        return np.maximum(0, X)
+
+    def backward(self, dOut):
+        return dOut * (self._cache > 0)   # zero where ReLU was off</code></pre>
+
+<p>The MLP just runs through the list of layers — forward in order, backward in reverse:</p>
+<pre><code># Forward
+out = X
+for layer in self.layers:
+    out = layer.forward(out)
+
+# Backward
+grad = loss_gradient
+for layer in reversed(self.layers):
+    grad = layer.backward(grad)</code></pre>
+</section>
+
+<section>
+<h2>03 · Building an MLP of Any Depth</h2>
+<pre><code>mlp = MLP(n_in=6, hidden_sizes=[16, 8], lr=0.05, epochs=1500)
+# Creates: Dense(6→16) → ReLU → Dense(16→8) → ReLU → Dense(8→1) → Sigmoid
+
+mlp.fit(X_train, y_train)
+preds = mlp.predict(X_test)</code></pre>
+
+<table>
+  <tr><th>Architecture</th><th>Parameters</th><th>Depth</th></tr>
+  <tr><td><code>[8]</code></td><td>6×8+8 + 8×1+1 = 65</td><td>1 hidden layer</td></tr>
+  <tr><td><code>[16, 8]</code></td><td>6×16+16 + 16×8+8 + 8×1+1 = 249</td><td>2 hidden layers</td></tr>
+  <tr><td><code>[32, 16, 8]</code></td><td>6×32+32 + 32×16+16 + 16×8+8 + 8+1 = 793</td><td>3 hidden layers</td></tr>
+</table>
+</section>
+
+<section>
+<h2>04 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_18&gt; python main.py</span><br><br>
+MODULE 18 — Multi-Layer Network from Scratch<br>
+====================================================<br>
+<br>
+=== XOR Problem ===<br>
+&nbsp;&nbsp;Single Neuron accuracy : 0.75  (max possible: 0.75 — cannot solve XOR)<br>
+&nbsp;&nbsp;2-layer MLP accuracy   : 1.00  (should reach 1.00)<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Input  True  1-layer  MLP<br>
+&nbsp;&nbsp;----------------------------------<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0, 0]     0        0    0<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[0, 1]     1        1    1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[1, 0]     1        0    1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[1, 1]     0        0    0<br>
+<br>
+=== Detective Case Classification ===<br>
+&nbsp;&nbsp;arch=[8]       params=  65  train=0.771  test=0.750<br>
+&nbsp;&nbsp;arch=[16, 8]   params= 249  train=0.792  test=0.750<br>
+&nbsp;&nbsp;arch=[32,16,8] params= 793  train=0.823  test=0.708<br>
+<br>
+Saved → plots/mlp_loss_curves.png
+</div>
+
+<div class="callout warn">
+  <strong>The deepest architecture (793 params) has the highest training accuracy but the lowest test accuracy.</strong> Classic overfitting — too many parameters for 96 training samples. The simple [8] architecture generalises best.
+</div>
+</section>
+
+<section>
+<h2>05 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The single neuron gets 75% on XOR. Why 75% and not 50%? Draw the four XOR points on a 2D grid and draw the best possible straight line through them.</p>
+  <p>Then: why can a 2-layer MLP learn XOR when a single neuron can't?</p>
+</div>
+<div class="callout">
+  <strong>Answer 1:</strong> Three of the four XOR points can be correctly separated by a horizontal or vertical line (e.g., "output=1 when B=1" correctly handles [0,1] and [1,0] but not [1,1]). That's 3/4 = 75%.<br><br>
+  <strong>Answer 2:</strong> The hidden layer transforms the input into a new feature space where the classes <em>are</em> linearly separable. Concretely: one hidden neuron learns "are A OR B present?" and another learns "are both A AND B present?" The output neuron then learns OR - AND, which equals XOR. Each step is linear; the combination through the non-linear activation is not.
+</div>
+</section>
+
+<section>
+<h2>06 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: How does this layer abstraction relate to PyTorch?</div>
+  <div class="qa-a">PyTorch's nn.Module is this exact pattern with automatic differentiation added. nn.Linear is our DenseLayer; nn.ReLU is our ReLULayer. The difference is that PyTorch computes backward() automatically using autograd — you never write it by hand. Module 22 shows the PyTorch version of this exact MLP.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is "universal approximation theorem"?</div>
+  <div class="qa-a">It states that a neural network with a single hidden layer of sufficient width can approximate any continuous function to arbitrary precision (given enough neurons and data). This is why we know MLPs are powerful in principle. In practice, deeper-but-narrower networks often generalise better than one extremely wide hidden layer.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Why does full-batch gradient descent work here but might fail on larger datasets?</div>
+  <div class="qa-a">Full-batch GD computes the gradient over all 96 samples simultaneously — fine for small data. On large datasets (millions of samples), computing the full gradient each step is too slow. Mini-batch SGD (Module 20) uses random subsets of data per step, making each update faster at the cost of noisier gradients.</div>
+</div>
+</section>
+
+<section>
+<h2>07 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 19 — Activation Functions Deep Dive</strong><br>
+  You've used sigmoid and ReLU. Module 19 compares them head-to-head alongside tanh and Leaky ReLU, explains the vanishing gradient problem that kills sigmoid in deep networks, and shows why ReLU became the default — and when to break that rule.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_17/tutorial.html">← Module 17: Backpropagation</a>
+  <a href="../module_19/tutorial.html">Module 19: Activation Functions →</a>
+</div>
+
+</body>
+</html>
