@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 24 — Full CNN in PyTorch</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  /* Architecture diagram */
+  .arch{display:flex;align-items:center;flex-wrap:wrap;gap:.4rem;margin:1rem 0}
+  .block{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.5rem .9rem;text-align:center;font-size:.82rem}
+  .block .label{color:var(--accent);font-weight:600}
+  .block .dim{color:var(--muted);font-size:.75rem}
+  .arrow{color:var(--muted);font-size:1.2rem}
+  .block.pool{border-color:var(--purple)}
+  .block.pool .label{color:var(--purple)}
+  .block.fc{border-color:var(--green)}
+  .block.fc .label{color:var(--green)}
+  .block.out{border-color:var(--yellow)}
+  .block.out .label{color:var(--yellow)}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Module 22 (PyTorch basics — nn.Module, training loop), Module 23 (what a convolutional layer does from scratch).</p>
+  <p><strong>Install:</strong> <code>pip install torch torchvision</code></p>
+  <p><strong>Key idea:</strong> Stack two convolutional blocks (conv → relu → pool), flatten the output, and classify with a fully-connected head. Let PyTorch handle everything: autograd, batching, data loading. Expect ~98% accuracy on MNIST in 5 epochs.</p>
+</div>
+</section>
+
+<h1>Module 24 — Full CNN in PyTorch</h1>
+<h2>Ada finally stops looking at pixels and starts seeing patterns</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>In Module 23 Ada slid a single hand-crafted template over one photograph. That was useful — but she had to hand-pick the templates herself. What if she could <em>hire</em> a team of 16 junior detectives, give each one a blank notepad, and let them figure out which templates were most useful for solving cases?</p>
+<p>That's a CNN training run. The 16 "junior detectives" in the first layer are the 16 convolutional filters. Their notepads are initialised to random scribbles. After thousands of crime cases (MNIST digits), each detective's notepad has converged to something useful — one might specialise in "top curves" (which separate 0, 6, 8 from 1, 7), another in "vertical strokes" (which separate 1, 4, 7). The final case verdict (which digit 0–9) is handed to a senior detective (the Dense layers) who reads all 32 junior reports.</p>
+<p>You never tell any of them what to look for. Backprop does that automatically by adjusting the templates that led to wrong verdicts.</p>
+</section>
+
+<section>
+<h2>02 · Architecture — One Picture</h2>
+
+<div class="arch">
+  <div class="block">
+    <div class="label">Input</div>
+    <div class="dim">(B,1,28,28)</div>
+  </div>
+  <span class="arrow">→</span>
+  <div class="block">
+    <div class="label">Conv2d(1→16)</div>
+    <div class="dim">+ReLU, pad=1</div>
+    <div class="dim">(B,16,28,28)</div>
+  </div>
+  <span class="arrow">→</span>
+  <div class="block pool">
+    <div class="label">MaxPool(2×2)</div>
+    <div class="dim">(B,16,14,14)</div>
+  </div>
+  <span class="arrow">→</span>
+  <div class="block">
+    <div class="label">Conv2d(16→32)</div>
+    <div class="dim">+ReLU, pad=1</div>
+    <div class="dim">(B,32,14,14)</div>
+  </div>
+  <span class="arrow">→</span>
+  <div class="block pool">
+    <div class="label">MaxPool(2×2)</div>
+    <div class="dim">(B,32,7,7)</div>
+  </div>
+  <span class="arrow">→</span>
+  <div class="block fc">
+    <div class="label">Flatten</div>
+    <div class="dim">(B,1568)</div>
+  </div>
+  <span class="arrow">→</span>
+  <div class="block fc">
+    <div class="label">Linear(1568→128)</div>
+    <div class="dim">+ReLU+Dropout</div>
+  </div>
+  <span class="arrow">→</span>
+  <div class="block out">
+    <div class="label">Linear(128→10)</div>
+    <div class="dim">LogSoftmax</div>
+  </div>
+</div>
+
+<p>Two convolutional blocks extract features; the flatten + dense block classifies them. MaxPool halves spatial dimensions so 28×28 → 14×14 → 7×7. After flattening: 32 channels × 7 × 7 pixels = 1,568 values per image.</p>
+</section>
+
+<section>
+<h2>03 · The Model Code</h2>
+<pre><code>class DigitCNN(nn.Module):
+    FEATURE_H, FEATURE_W, CONV2_CHANNELS = 7, 7, 32
+
+    def __init__(self, dropout_p=0.3):
+        super().__init__()
+        # padding=1 keeps spatial size the same after each conv (same-padding)
+        self.conv1 = nn.Conv2d(in_channels=1,  out_channels=16, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
+        self.pool  = nn.MaxPool2d(kernel_size=2, stride=2)   # shared — no learnable params
+        flat_size  = self.CONV2_CHANNELS * self.FEATURE_H * self.FEATURE_W   # 1568
+        self.fc1     = nn.Linear(flat_size, 128)
+        self.dropout = nn.Dropout(p=dropout_p)
+        self.fc2     = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))   # (B,1,28,28) → (B,16,14,14)
+        x = self.pool(F.relu(self.conv2(x)))   # (B,16,14,14) → (B,32,7,7)
+        x = x.view(x.size(0), -1)             # flatten → (B,1568)
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)                        # (B,10) raw logits
+        return F.log_softmax(x, dim=1)         # (B,10) log-probabilities</code></pre>
+
+<div class="callout">
+  <strong>Why <code>x.view(x.size(0), -1)</code>?</strong> After the second MaxPool the tensor is <code>(batch, 32, 7, 7)</code>. The Dense layer expects a 1-D feature vector per image. <code>view(B, -1)</code> merges the last three dims: 32 × 7 × 7 = 1,568. The <code>-1</code> tells PyTorch to infer the size automatically.
+</div>
+</section>
+
+<section>
+<h2>04 · Training Loop</h2>
+<pre><code># Setup
+model     = DigitCNN(dropout_p=0.3)
+criterion = nn.NLLLoss()                       # expects log-probabilities
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+# One epoch
+model.train()
+for X_batch, y_batch in train_loader:
+    optimizer.zero_grad()
+    log_probs = model(X_batch)                 # forward pass
+    loss = criterion(log_probs, y_batch)       # scalar loss
+    loss.backward()                            # compute gradients
+    optimizer.step()                           # update weights
+
+# Evaluation
+model.eval()
+with torch.no_grad():
+    log_probs = model(X_test)
+    preds = log_probs.argmax(dim=1)            # class with highest log-prob</code></pre>
+
+<p>The pattern is identical to Module 22's MLP — only the model architecture changed. That's the power of the PyTorch abstraction: any <code>nn.Module</code> plugs into the same four-step training loop.</p>
+</section>
+
+<section>
+<h2>05 · MNIST Normalisation Numbers</h2>
+<p>The transform pipeline applies <code>Normalize((0.1307,), (0.3081,))</code>. Where do these come from?</p>
+<pre><code># These are the per-pixel mean and std computed over all 60,000 training images:
+# mean = 0.1307  (most pixels are near-black — the average MNIST pixel is dark)
+# std  = 0.3081  (pixels cluster near 0 or 1 — bimodal distribution)
+
+# After normalisation:
+# zero_pixel  → (0.0 - 0.1307) / 0.3081 = -0.424
+# white_pixel → (1.0 - 0.1307) / 0.3081 = +2.821</code></pre>
+
+<div class="callout warn">
+  <strong>Normalisation is mandatory.</strong> Without it, gradient updates for the first conv layer are dominated by bright pixels and the network trains inconsistently. We hardcode the training-set statistics here rather than computing them each run — consistent with how you would freeze preprocessing in production.
+</div>
+</section>
+
+<section>
+<h2>06 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_24&gt; python main.py</span><br><br>
+  ====================================================<br>
+  MODULE 24 — Full CNN in PyTorch (MNIST)<br>
+  ====================================================<br>
+  Device: cpu<br>
+  <br>
+  Loading MNIST (downloads ~12 MB on first run)...<br>
+  Train: 60,000&nbsp; Test: 10,000<br>
+  <br>
+  Parameter count by layer:<br>
+  &nbsp;&nbsp;conv1.weight&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[16, 1, 3, 3]&nbsp; →&nbsp;&nbsp;&nbsp;144 params<br>
+  &nbsp;&nbsp;conv1.bias&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[16]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; →&nbsp;&nbsp;&nbsp;&nbsp;16 params<br>
+  &nbsp;&nbsp;conv2.weight&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[32, 16, 3, 3] →&nbsp;4,608 params<br>
+  &nbsp;&nbsp;conv2.bias&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[32]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; →&nbsp;&nbsp;&nbsp;&nbsp;32 params<br>
+  &nbsp;&nbsp;fc1.weight&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[128, 1568]&nbsp;&nbsp;&nbsp; → 200,704 params<br>
+  &nbsp;&nbsp;fc1.bias&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[128]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; →&nbsp;&nbsp;&nbsp;128 params<br>
+  &nbsp;&nbsp;fc2.weight&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[10, 128]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; →&nbsp;1,280 params<br>
+  &nbsp;&nbsp;fc2.bias&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[10]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; →&nbsp;&nbsp;&nbsp;&nbsp;10 params<br>
+  &nbsp;&nbsp;TOTAL&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → 206,922 params<br>
+  <br>
+  Training for 5 epochs (Adam lr=0.001):<br>
+  &nbsp;Epoch&nbsp;&nbsp; Tr Loss&nbsp;&nbsp; Tr Acc&nbsp;&nbsp; Va Loss&nbsp;&nbsp; Va Acc<br>
+  ----------------------------------------------<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;1&nbsp;&nbsp; 0.1791&nbsp;&nbsp; 0.9461&nbsp;&nbsp; 0.0619&nbsp;&nbsp; 0.9808<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp; 0.0598&nbsp;&nbsp; 0.9820&nbsp;&nbsp; 0.0465&nbsp;&nbsp; 0.9856<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;3&nbsp;&nbsp; 0.0448&nbsp;&nbsp; 0.9864&nbsp;&nbsp; 0.0392&nbsp;&nbsp; 0.9876<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;4&nbsp;&nbsp; 0.0356&nbsp;&nbsp; 0.9890&nbsp;&nbsp; 0.0344&nbsp;&nbsp; 0.9891<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;5&nbsp;&nbsp; 0.0296&nbsp;&nbsp; 0.9909&nbsp;&nbsp; 0.0318&nbsp;&nbsp; 0.9901<br>
+  <br>
+  Final test accuracy: 99.01%<br>
+  Saved → plots/cnn_training.png<br>
+  Saved → plots/cnn_predictions.png<br>
+  <br>
+  Done.
+</div>
+</section>
+
+<section>
+<h2>07 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The parameter table above shows that <code>fc1</code> alone accounts for 200,704 of 206,922 total parameters — nearly 97% of the network. Yet <code>conv1</code> + <code>conv2</code> are doing the heavy lifting of recognising handwritten shapes.</p>
+  <p>Redesign the architecture to reduce the fc1 parameter count by 4× while keeping the same convolutional feature extractor. What would you change? What is the new total parameter count?</p>
+</div>
+<div class="callout">
+  <strong>Answer:</strong> Replace <code>fc1 = nn.Linear(1568, 128)</code> with <code>fc1 = nn.Linear(1568, 32)</code>. New fc1 parameters: 1568 × 32 + 32 = 50,208 (was 200,832). New total: ~56,000 — a 3.7× reduction. The accuracy drop is usually small (98.5%+ vs 99%) because the convolutional features are already compact. Alternatively, add a third conv+pool block to reduce spatial dims further before the Dense layer: 32 channels × 3 × 3 = 288 → fc1 becomes Linear(288, 64) = 18,432 params.
+</div>
+</section>
+
+<section>
+<h2>08 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Why NLLLoss + log_softmax instead of just CrossEntropyLoss?</div>
+  <div class="qa-a"><code>nn.CrossEntropyLoss</code> is exactly <code>log_softmax + NLLLoss</code> fused internally. We split them to make the pipeline visible: the model outputs log-probabilities (which you can <code>exp()</code> to get real probabilities and <code>argmax()</code> to get predictions), and the loss evaluates those. In production you'd use <code>CrossEntropyLoss</code> + raw logits for a tiny numerical gain. Either way the gradients are identical.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: The same <code>self.pool</code> object is called twice in forward(). Is that correct?</div>
+  <div class="qa-a">Yes. <code>nn.MaxPool2d</code> has no learnable parameters — it's a pure operation (take the max of each 2×2 window). Reusing the same object is correct and idiomatic. Contrast with conv layers, which hold weight tensors and must be separate objects so each has its own independent learned filters.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Why does Adam need a lower learning rate than SGD?</div>
+  <div class="qa-a">Adam divides each parameter's gradient by a running estimate of its recent gradient magnitude — in effect computing an individual adaptive learning rate per parameter. If the base <code>lr</code> is 0.01 (typical SGD starting point), Adam's effective per-parameter update can be much larger than intended, causing instability. Starting at <code>lr=1e-3</code> is the standard Adam default for most networks, equivalent to a heavily-tuned SGD with momentum in practice.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What does Dropout actually do during training vs evaluation?</div>
+  <div class="qa-a">During <code>model.train()</code>, Dropout randomly zeroes each activation with probability <code>p</code> and scales the survivors by <code>1/(1-p)</code> (inverted dropout — keeps the expected sum unchanged). During <code>model.eval()</code>, Dropout is a no-op — all activations pass through unchanged. This is why calling <code>model.eval()</code> before evaluation is not optional: without it, your test predictions are randomly corrupted and your accuracy will be lower and non-deterministic.</div>
+</div>
+</section>
+
+<section>
+<h2>09 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 25 — Batch Normalisation &amp; Dropout in PyTorch</strong><br>
+  Two training stabilisers used in every modern CNN. Batch Norm normalises each mini-batch's activations mid-network, allowing much higher learning rates. Dropout (which you saw here) we'll now apply at multiple points in a deeper network and study the effect of the dropout rate on overfitting. You'll add both to the DigitCNN and watch training curves smooth out.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_23/tutorial.html">← Module 23: Conv Layer from Scratch</a>
+  <a href="../module_25/tutorial.html">Module 25: BatchNorm &amp; Dropout →</a>
+</div>
+
+</body>
+</html>
