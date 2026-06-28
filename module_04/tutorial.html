@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 04 — Linear Regression: Predicting the Next Crime Wave</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#f0883e;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.7;padding:2rem}
+  h1{color:var(--accent);font-size:2rem;margin-bottom:.4rem}
+  h2{color:var(--green);font-size:1.3rem;margin:2rem 0 .8rem;border-left:3px solid var(--green);padding-left:.8rem}
+  h3{color:var(--orange);font-size:1.05rem;margin:1.2rem 0 .4rem}
+  p,li{color:var(--text);margin-bottom:.6rem}
+  ul,ol{padding-left:1.5rem}
+  code{background:var(--panel);padding:.15rem .4rem;border-radius:4px;font-family:'Fira Code',monospace;font-size:.88em;color:var(--accent)}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  pre code{background:none;padding:0;color:var(--text)}
+  .badge{display:inline-block;background:var(--accent);color:#000;font-size:.75rem;padding:.2rem .6rem;border-radius:12px;font-weight:700;margin-right:.4rem}
+  .warn{background:#2d1c1c;border-left:4px solid var(--red);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .tip{background:#1c2d1c;border-left:4px solid var(--green);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .info{background:#1c1c2d;border-left:4px solid var(--accent);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem}
+  .qa{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.8rem 0}
+  .qa .q{color:var(--orange);font-weight:600}
+  .qa .a{color:var(--muted);margin-top:.4rem}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--panel);color:var(--accent);padding:.6rem 1rem;text-align:left;border:1px solid var(--border)}
+  td{padding:.5rem 1rem;border:1px solid var(--border);color:var(--text)}
+  .breadcrumb{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem}
+  .math{font-family:'Fira Code',monospace;background:var(--panel);padding:.4rem .8rem;border-radius:6px;display:inline-block;margin:.3rem 0;color:var(--purple)}
+</style>
+</head>
+<body>
+<div class="breadcrumb">Detective Agency ML Curriculum › Module 04</div>
+<h1>Module 04 — Linear Regression: Predicting the Next Crime Wave</h1>
+<p><span class="badge">Beginner</span> Our first predictive model. Given what we know about today, predict a number for tomorrow.</p>
+
+<h2>00 — The Core Idea</h2>
+<p>Linear regression finds the best-fit line (or hyperplane) through data points. "Best-fit" means the line that minimises the total squared distance between predictions and actual values.</p>
+<div class="math">ŷ = β₀ + β₁x₁ + β₂x₂ + ... + βₚxₚ</div>
+<ul>
+  <li><strong>β₀</strong> — intercept (predicted value when all features = 0)</li>
+  <li><strong>β₁...βₚ</strong> — coefficients (how much ŷ changes per unit of each feature)</li>
+  <li><strong>ŷ</strong> — predicted value (a number, not a probability)</li>
+</ul>
+<p>The model learns β by minimising Mean Squared Error over the training set:</p>
+<div class="math">MSE = (1/n) Σ (yᵢ - ŷᵢ)²</div>
+
+<h2>01 — The Golden Rule: Split First</h2>
+<div class="warn"><strong>Cardinal rule:</strong> Split your data into train and test sets BEFORE any fitting, scaling, or preprocessing. Doing it after leaks test information into training — your model will appear better than it really is on new data.</div>
+<pre><code>from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.2,          # 20% held out for testing
+    random_state=42,        # reproducible split
+)
+# Everything learned from here uses ONLY X_train, y_train
+# X_test, y_test are locked away until final evaluation</code></pre>
+
+<h2>02 — Fitting the Model</h2>
+<pre><code>from sklearn.linear_model import LinearRegression
+
+model = LinearRegression()
+model.fit(X_train, y_train)       # learn β₀, β₁, β₂, ...
+
+print(model.intercept_)           # β₀
+print(model.coef_)                # [β₁, β₂, ...]
+
+# Make predictions
+y_pred = model.predict(X_test)    # apply learned β to new X</code></pre>
+
+<h2>03 — Evaluation Metrics</h2>
+<table>
+  <tr><th>Metric</th><th>Formula</th><th>Interpretation</th></tr>
+  <tr><td>MSE</td><td>(1/n) Σ (y - ŷ)²</td><td>Average squared error. Penalises large errors heavily.</td></tr>
+  <tr><td>RMSE</td><td>√MSE</td><td>Same units as target. "On average, off by X cases."</td></tr>
+  <tr><td>MAE</td><td>(1/n) Σ |y - ŷ|</td><td>Average absolute error. Robust to outliers.</td></tr>
+  <tr><td>R²</td><td>1 - SS_res/SS_tot</td><td>Fraction of variance explained. 1=perfect, 0=predicts mean.</td></tr>
+</table>
+<pre><code>from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import numpy as np
+
+mse  = mean_squared_error(y_test, y_pred)
+rmse = np.sqrt(mse)
+mae  = mean_absolute_error(y_test, y_pred)
+r2   = r2_score(y_test, y_pred)
+
+print(f"RMSE: {rmse:.2f}   MAE: {mae:.2f}   R²: {r2:.4f}")</code></pre>
+<div class="tip"><strong>Always evaluate on BOTH train and test.</strong> If train R²=0.95 and test R²=0.60, the model is overfitting — memorising training data, not generalising.</div>
+
+<h2>04 — Residual Analysis</h2>
+<p>Residuals = actual − predicted. They should:</p>
+<ul>
+  <li>Have mean ≈ 0 (no systematic bias)</li>
+  <li>Be randomly scattered (no pattern vs fitted values)</li>
+  <li>Have roughly constant spread (no fan shape — homoscedasticity)</li>
+</ul>
+<pre><code>residuals = y_test - y_pred
+
+# Residuals vs Predicted — look for patterns
+ax.scatter(y_pred, residuals, alpha=0.5)
+ax.axhline(0, color="red", linestyle="--")
+
+# Fan shape → heteroscedasticity → try log(y)
+# Curve      → non-linearity   → try polynomial features</code></pre>
+
+<h2>05 — Multiple Features</h2>
+<pre><code>FEATURES = ["temp_c", "is_weekend", "day_of_week", "prev_day_cases"]
+X = df[FEATURES].values   # (n_samples, 4)
+y = df["cases"].values    # (n_samples,)
+
+# Same API regardless of number of features
+model = LinearRegression().fit(X_train, y_train)
+
+# Each coefficient = effect of that feature holding others constant
+for name, coef in zip(FEATURES, model.coef_):
+    print(f"  {name}: {coef:+.3f}")</code></pre>
+
+<h2>06 — Assumptions of Linear Regression</h2>
+<ol>
+  <li><strong>Linearity:</strong> the relationship between X and y is linear. If not, add polynomial features or use a non-linear model.</li>
+  <li><strong>Independence:</strong> observations are independent (no time-series autocorrelation without handling it).</li>
+  <li><strong>Homoscedasticity:</strong> residual variance is constant across all fitted values.</li>
+  <li><strong>Normality of residuals:</strong> matters for confidence intervals and hypothesis tests; less critical for prediction.</li>
+  <li><strong>No multicollinearity:</strong> features should not be highly correlated with each other (inflates coefficient variance).</li>
+</ol>
+<div class="info"><strong>Practical note:</strong> For prediction (not inference), assumptions 3–5 can be partially violated without catastrophic loss of accuracy. But assumption 1 (linearity) matters most — fix it with feature engineering.</div>
+
+<h2>07 — When Linear Regression Fails</h2>
+<div class="grid">
+  <div class="card">
+    <h3>Problem: curved relationship</h3>
+    <p>Add polynomial features:<br><code>PolynomialFeatures(degree=2)</code></p>
+  </div>
+  <div class="card">
+    <h3>Problem: outliers pulling the fit</h3>
+    <p>Use <code>HuberRegressor</code> or log-transform the target.</p>
+  </div>
+  <div class="card">
+    <h3>Problem: too many features (p ≫ n)</h3>
+    <p>Use Ridge or Lasso regularisation (Module 04 advanced).</p>
+  </div>
+  <div class="card">
+    <h3>Problem: target is 0/1 or a count</h3>
+    <p>Use Logistic Regression (Module 05) or Poisson regression.</p>
+  </div>
+</div>
+
+<h2>08 — Quick Reference</h2>
+<pre><code>from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+import numpy as np
+
+# Full minimal workflow
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42)
+model = LinearRegression().fit(X_tr, y_tr)
+y_hat = model.predict(X_te)
+print(f"RMSE={np.sqrt(mean_squared_error(y_te,y_hat)):.3f}  R²={r2_score(y_te,y_hat):.3f}")</code></pre>
+
+<h2>09 — Q&amp;A Brain Check</h2>
+<div class="qa"><div class="q">Q: What does a negative coefficient mean?</div>
+<div class="a">A: As that feature increases by 1 unit, the predicted target decreases by |coef| units (holding all other features constant). For example, β(is_holiday) = -3 means holidays predict 3 fewer cases per day.</div></div>
+<div class="qa"><div class="q">Q: What does R² = 0 mean?</div>
+<div class="a">A: The model does no better than predicting the training mean for every sample. Your features have zero predictive power — or the relationship is non-linear and the model can't capture it.</div></div>
+<div class="qa"><div class="q">Q: Why is RMSE more interpretable than MSE?</div>
+<div class="a">A: MSE is in squared units (cases²). RMSE takes the square root to return to the original unit (cases), making it directly comparable to the scale of your target variable.</div></div>
+<div class="qa"><div class="q">Q: Does linear regression require feature scaling?</div>
+<div class="a">A: For prediction accuracy: no — the normal equation solution is scale-invariant. For coefficient interpretation: yes — coefficients are only comparable when features are on the same scale. For regularised regression (Ridge/Lasso): yes, always scale, or the regularisation penalises large-scale features unfairly.</div></div>
+
+<h2>10 — What's Next</h2>
+<ul>
+  <li><strong>Module 05:</strong> Logistic Regression — when the target is 0/1</li>
+  <li><strong>regression_advanced.py:</strong> normal equations, Ridge, Lasso coordinate descent, bias-variance decomposition</li>
+</ul>
+</body>
+</html>
