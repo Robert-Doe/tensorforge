@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 23 — Convolutional Layer</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--teal:#39d353;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;line-height:1.7;padding:2rem;max-width:900px;margin:auto}
+  h1{font-size:2.2rem;color:var(--accent);margin-bottom:.4rem}
+  h2{font-size:1.4rem;color:var(--yellow);margin:2rem 0 .8rem}
+  p{margin-bottom:1rem}
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  code{font-family:'Cascadia Code','Consolas',monospace;font-size:.9rem;color:var(--green)}
+  .callout{border-left:4px solid var(--accent);background:var(--surface);padding:1rem 1.4rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+  .callout.warn{border-color:var(--yellow)}
+  .callout.teal{border-color:var(--teal)}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--surface);color:var(--accent);padding:.6rem 1rem;text-align:left;border-bottom:2px solid var(--border)}
+  td{padding:.5rem 1rem;border-bottom:1px solid var(--border)}
+  tr:nth-child(even) td{background:#0f141a}
+  .terminal{background:#000;border:1px solid var(--border);border-radius:8px;padding:1.2rem;font-family:monospace;font-size:.88rem;margin:1rem 0;color:#e6edf3}
+  .terminal .prompt{color:var(--green)}
+  .qa-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+  .qa-q{padding:.8rem 1rem;color:var(--yellow);font-weight:600}
+  .qa-a{padding:.8rem 1rem;border-top:1px solid var(--border)}
+  .nav{display:flex;justify-content:space-between;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+  .nav a{color:var(--accent);text-decoration:none;font-weight:600}
+  /* Grid illustration */
+  .conv-vis{display:grid;grid-template-columns:repeat(3,2rem);gap:2px;margin:.5rem 0;font-size:.75rem}
+  .cell{width:2rem;height:2rem;display:flex;align-items:center;justify-content:center;border-radius:3px}
+  .img-cell{background:#1a2e1a}
+  .ker-cell{background:#2e1a2e;color:var(--purple)}
+  .out-cell{background:#1a1a2e;color:var(--accent)}
+  .highlight{border:2px solid var(--yellow)}
+  .filter-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin:1rem 0}
+  .filter-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.8rem;text-align:center}
+  .filter-card h3{font-size:.9rem;color:var(--accent);margin-bottom:.3rem}
+  .filter-card .detect{font-size:.8rem;color:var(--green)}
+  .filter-card .how{font-size:.75rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<section>
+<h2>00 · Before You Start</h2>
+<div class="callout">
+  <p><strong>Prerequisites:</strong> Modules 16-18 (neurons, forward pass). No PyTorch needed — this module is NumPy only.</p>
+  <p><strong>Key idea:</strong> A convolutional layer slides a small filter (kernel) across an image and computes a dot product at each position. The result is a <em>feature map</em> showing where that filter's pattern was found.</p>
+</div>
+</section>
+
+<h1>Module 23 — Convolutional Layer from Scratch</h1>
+<h2>Teaching a detective to look for patterns, not just numbers</h2>
+
+<section>
+<h2>01 · The Big Analogy</h2>
+<p>Ada is examining a crime scene photograph. Instead of describing every pixel, she has a set of <strong>evidence templates</strong> — a "broken window" template, a "forced door" template, a "footprint" template. She slides each template over the photo. Wherever a region of the photo matches the template closely, she marks it on a map. That map is the <strong>feature map</strong>.</p>
+<p>A convolutional layer is Ada with a stack of templates. Each template is a learned <strong>kernel</strong>. The feature maps tell the next layer <em>where</em> each pattern was detected.</p>
+</section>
+
+<section>
+<h2>02 · One Output Pixel — Step by Step</h2>
+<p>A 3×3 kernel sits on a 3×3 patch of the image. Element-wise multiply, then sum. That's one output pixel.</p>
+<pre><code>image_patch = [[0.1, 0.8, 0.9],
+               [0.1, 0.9, 0.8],
+               [0.1, 0.2, 0.1]]
+
+kernel      = [[-1, -2, -1],   # horizontal edge detector
+               [ 0,  0,  0],
+               [ 1,  2,  1]]
+
+output_pixel = sum(image_patch * kernel)
+             = (0.1×-1 + 0.8×-2 + 0.9×-1)   # top row
+             + (0.1×0  + 0.9×0  + 0.8×0 )   # middle row (zeros)
+             + (0.1×1  + 0.2×2  + 0.1×1 )   # bottom row
+             = -2.4 + 0 + 0.6 = -1.8         # strong negative → bright-above-dark edge</code></pre>
+
+<p>Slide the kernel one pixel to the right, repeat. After covering the entire image: one complete feature map.</p>
+</section>
+
+<section>
+<h2>03 · The Code</h2>
+<pre><code>def convolve2d(image, kernel, stride=1, padding=0):
+    H, W   = image.shape
+    kH, kW = kernel.shape
+
+    if padding > 0:
+        image = np.pad(image, padding, mode="constant")   # zero-pad edges
+
+    H_out = (H + 2*padding - kH) // stride + 1
+    W_out = (W + 2*padding - kW) // stride + 1
+    feature_map = np.zeros((H_out, W_out))
+
+    for i in range(H_out):
+        for j in range(W_out):
+            patch = image[i*stride : i*stride+kH,
+                          j*stride : j*stride+kW]
+            feature_map[i, j] = np.sum(patch * kernel)   # dot product
+
+    return feature_map</code></pre>
+</section>
+
+<section>
+<h2>04 · Kernels and What They Detect</h2>
+
+<div class="filter-grid">
+  <div class="filter-card">
+    <h3>Horizontal Edge</h3>
+    <pre style="font-size:.7rem;margin:.3rem 0;border:none;background:none;padding:0"><code>-1 -2 -1
+ 0  0  0
+ 1  2  1</code></pre>
+    <div class="detect">Finds top/bottom edges</div>
+    <div class="how">Top row negative, bottom positive → fires where brightness changes vertically</div>
+  </div>
+  <div class="filter-card">
+    <h3>Vertical Edge</h3>
+    <pre style="font-size:.7rem;margin:.3rem 0;border:none;background:none;padding:0"><code>-1  0  1
+-2  0  2
+-1  0  1</code></pre>
+    <div class="detect">Finds left/right edges</div>
+    <div class="how">Left column negative, right positive → fires where brightness changes horizontally</div>
+  </div>
+  <div class="filter-card">
+    <h3>Sharpen</h3>
+    <pre style="font-size:.7rem;margin:.3rem 0;border:none;background:none;padding:0"><code> 0 -1  0
+-1  5 -1
+ 0 -1  0</code></pre>
+    <div class="detect">Enhances fine details</div>
+    <div class="how">Centre weight 5, neighbours -1 → amplifies difference between pixel and surroundings</div>
+  </div>
+  <div class="filter-card">
+    <h3>Blur</h3>
+    <pre style="font-size:.7rem;margin:.3rem 0;border:none;background:none;padding:0"><code>1/9 1/9 1/9
+1/9 1/9 1/9
+1/9 1/9 1/9</code></pre>
+    <div class="detect">Smooths noise</div>
+    <div class="how">All weights equal → output is the average of the neighbourhood</div>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>CNNs don't use hand-crafted kernels.</strong> They start with random kernels and learn which patterns to detect by backpropagating the classification loss. Early layers learn edges; middle layers learn textures; deep layers learn high-level shapes like faces or wheels.
+</div>
+</section>
+
+<section>
+<h2>05 · Padding and Stride</h2>
+<table>
+  <tr><th>Parameter</th><th>Effect on output size</th><th>Use case</th></tr>
+  <tr><td><code>padding=0</code></td><td>Output shrinks by kH-1 and kW-1 pixels</td><td>Default — some spatial info lost at edges</td></tr>
+  <tr><td><code>padding=1</code> (3×3 kernel)</td><td>Output same size as input ("same" convolution)</td><td>Keep spatial dimensions through many layers</td></tr>
+  <tr><td><code>stride=1</code></td><td>Kernel moves 1 pixel at a time — dense sampling</td><td>High-resolution feature maps</td></tr>
+  <tr><td><code>stride=2</code></td><td>Output is half the size — spatial downsampling</td><td>Reduce computation; similar to pooling</td></tr>
+</table>
+<pre><code># Output size formula:
+H_out = (H + 2 * padding - kH) // stride + 1
+
+# 28×28 input, 3×3 kernel:
+# padding=0, stride=1 → (28 - 3) // 1 + 1 = 26
+# padding=1, stride=1 → (28 + 2 - 3) // 1 + 1 = 28  (same size)
+# padding=0, stride=2 → (28 - 3) // 2 + 1 = 13</code></pre>
+</section>
+
+<section>
+<h2>06 · Run It</h2>
+<div class="terminal">
+  <span class="prompt">PS C:\bob_ml_dl\module_23&gt; python main.py</span><br><br>
+MODULE 23 — Convolutional Layer from Scratch<br>
+====================================================<br>
+<br>
+Synthetic image shape: (28, 28)<br>
+Pixel value range: [0.02, 0.88]<br>
+<br>
+Horizontal edge feature map shape: (28, 28)<br>
+Strong response range: [-3.41, 3.38]<br>
+&nbsp;&nbsp;High values = horizontal edges found in the image<br>
+<br>
+=== Stride effect on output size ===<br>
+&nbsp;&nbsp;stride=1  output shape: (26, 26)<br>
+&nbsp;&nbsp;stride=2  output shape: (13, 13)<br>
+&nbsp;&nbsp;stride=4  output shape:  (7,  7)<br>
+<br>
+Horizontal edge detector — one output pixel:<br>
+&nbsp;&nbsp;Input patch:<br>
+&nbsp;&nbsp;[[0.13  0.09  0.11]<br>
+&nbsp;&nbsp; [0.85  0.85  0.85]<br>
+&nbsp;&nbsp; [0.85  0.85  0.85]]<br>
+&nbsp;&nbsp;Kernel: [[-1,-2,-1],[0,0,0],[1,2,1]]<br>
+&nbsp;&nbsp;Dot product: 2.831<br>
+<br>
+=== Random kernel vs. hand-crafted kernel ===<br>
+&nbsp;&nbsp;Random kernel response range  : [-2.12, 2.44]<br>
+&nbsp;&nbsp;Edge detector response range  : [-3.41, 3.38]<br>
+<br>
+Saved → plots/conv_feature_maps.png
+</div>
+</section>
+
+<section>
+<h2>07 · Brain Exercise</h2>
+<div class="callout warn">
+  <p>The output of a single convolutional filter is a 2D feature map. A typical CNN first layer has 32 filters. What is the shape of the first layer's output for a 28×28 grayscale image with 32 filters, kernel 3×3, padding=1?</p>
+  <p>Then: what is the total number of learnable parameters in that layer (weights only, no bias)?</p>
+</div>
+<div class="callout">
+  <strong>Output shape:</strong> (32, 28, 28) — 32 feature maps each 28×28.<br><br>
+  <strong>Parameters:</strong> Each filter has 3×3×1 = 9 weights (1 input channel). 32 filters → 32 × 9 = 288 weights. Plus 32 biases = 320 total. Compare to a Dense layer from 784 input pixels to 32 neurons: 784 × 32 = 25,088 weights. The convolutional layer achieves the same spatial coverage with 98% fewer parameters by <em>sharing weights</em> — the same filter is applied at every position.
+</div>
+</section>
+
+<section>
+<h2>08 · Q&amp;A</h2>
+<div class="qa-block">
+  <div class="qa-q">Q: Why is weight sharing so important in CNNs?</div>
+  <div class="qa-a">The same edge detector is useful whether an edge appears in the top-left or bottom-right of the image. Weight sharing (the same kernel applied everywhere) encodes this translational invariance. A Dense layer has no such inductive bias — it treats every pixel location independently, requiring far more parameters and data to learn translation-invariant features.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: What is a feature map?</div>
+  <div class="qa-a">The output of convolving one filter over one image. A feature map is a spatial heatmap: high values indicate positions where the filter's pattern was found, low values indicate it was absent. After 32 filters, you have 32 feature maps — each channel of the output volume represents one type of detected pattern.</div>
+</div>
+<div class="qa-block">
+  <div class="qa-q">Q: Why don't CNNs use the backward pass you skipped?</div>
+  <div class="qa-a">They do — PyTorch's nn.Conv2d computes it automatically via autograd. The backward pass for convolution is another convolution (a "transposed convolution" or "cross-correlation with a flipped kernel"). It's used to compute both dL/dKernel (to update the filter weights) and dL/dInput (to pass gradients to the previous layer). Module 24 uses autograd so you never have to implement it manually.</div>
+</div>
+</section>
+
+<section>
+<h2>09 · What's Next</h2>
+<div class="callout teal">
+  <strong>Module 24 — Full CNN in PyTorch</strong><br>
+  Stack convolutional layers, add max-pooling, connect to a Dense classifier, and train end-to-end on MNIST (60,000 handwritten digit images). You'll see how the kernel values change from random noise to interpretable edge detectors over the first few epochs.
+</div>
+</section>
+
+<div class="nav">
+  <a href="../module_22/tutorial.html">← Module 22: PyTorch Intro</a>
+  <a href="../module_24/tutorial.html">Module 24: Full CNN →</a>
+</div>
+
+</body>
+</html>
