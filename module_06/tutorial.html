@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 06 — KNN: Guilt by Association</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#f0883e;--purple:#bc8cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.7;padding:2rem}
+  h1{color:var(--accent);font-size:2rem;margin-bottom:.4rem}
+  h2{color:var(--green);font-size:1.3rem;margin:2rem 0 .8rem;border-left:3px solid var(--green);padding-left:.8rem}
+  h3{color:var(--orange);font-size:1.05rem;margin:1.2rem 0 .4rem}
+  p,li{color:var(--text);margin-bottom:.6rem}
+  ul,ol{padding-left:1.5rem}
+  code{background:var(--panel);padding:.15rem .4rem;border-radius:4px;font-family:'Fira Code',monospace;font-size:.88em;color:var(--accent)}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.2rem;overflow-x:auto;margin:1rem 0}
+  pre code{background:none;padding:0;color:var(--text)}
+  .badge{display:inline-block;background:var(--accent);color:#000;font-size:.75rem;padding:.2rem .6rem;border-radius:12px;font-weight:700;margin-right:.4rem}
+  .warn{background:#2d1c1c;border-left:4px solid var(--red);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .tip{background:#1c2d1c;border-left:4px solid var(--green);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .info{background:#1c1c2d;border-left:4px solid var(--accent);padding:.8rem 1rem;border-radius:0 6px 6px 0;margin:1rem 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem}
+  .qa{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.8rem 0}
+  .qa .q{color:var(--orange);font-weight:600}
+  .qa .a{color:var(--muted);margin-top:.4rem}
+  table{width:100%;border-collapse:collapse;margin:1rem 0}
+  th{background:var(--panel);color:var(--accent);padding:.6rem 1rem;text-align:left;border:1px solid var(--border)}
+  td{padding:.5rem 1rem;border:1px solid var(--border);color:var(--text)}
+  .breadcrumb{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem}
+  .step{display:flex;gap:1rem;margin:.8rem 0;align-items:flex-start}
+  .step-num{background:var(--accent);color:#000;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;margin-top:.1rem}
+</style>
+</head>
+<body>
+<div class="breadcrumb">Detective Agency ML Curriculum › Module 06</div>
+<h1>Module 06 — K-Nearest Neighbours: Guilt by Association</h1>
+<p><span class="badge">Beginner</span> The simplest classifier imaginable: look at a suspect's nearest known cases and vote on the label. No training, no parameters to learn.</p>
+
+<h2>00 — The Algorithm in Plain English</h2>
+<div class="step"><div class="step-num">1</div><p>Store ALL training examples (no actual learning happens — KNN is a <strong>lazy learner</strong>).</p></div>
+<div class="step"><div class="step-num">2</div><p>For a new point x: compute the distance to every stored training point.</p></div>
+<div class="step"><div class="step-num">3</div><p>Select the K training points with the smallest distances.</p></div>
+<div class="step"><div class="step-num">4</div><p><strong>Classification:</strong> majority vote among the K neighbours. <strong>Regression:</strong> mean of their y values.</p></div>
+
+<h2>01 — Distance Metrics</h2>
+<table>
+  <tr><th>Metric</th><th>Formula</th><th>Use when</th></tr>
+  <tr><td>Euclidean (L2)</td><td>√Σ(xᵢ - yᵢ)²</td><td>Default. Continuous features on same scale.</td></tr>
+  <tr><td>Manhattan (L1)</td><td>Σ|xᵢ - yᵢ|</td><td>High-dimensional, robust to outliers.</td></tr>
+  <tr><td>Minkowski</td><td>(Σ|xᵢ-yᵢ|ᵖ)^(1/p)</td><td>Generalises L1 (p=1) and L2 (p=2).</td></tr>
+  <tr><td>Hamming</td><td>fraction of positions that differ</td><td>Categorical or binary features.</td></tr>
+</table>
+<div class="warn"><strong>Critical:</strong> KNN is extremely sensitive to feature scale. A feature in thousands (income) will completely dominate a feature in ones (number of children). Always StandardScale before KNN.</div>
+
+<h2>02 — Fitting and Predicting</h2>
+<pre><code>from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2,
+                                            stratify=y, random_state=42)
+scaler  = StandardScaler()
+X_tr_s  = scaler.fit_transform(X_tr)
+X_te_s  = scaler.transform(X_te)
+
+knn = KNeighborsClassifier(
+    n_neighbors=7,          # K — number of neighbours
+    weights="distance",     # closer neighbours vote more strongly
+    metric="euclidean",     # distance function
+)
+knn.fit(X_tr_s, y_tr)      # "training" just stores X_tr_s, y_tr
+
+y_pred = knn.predict(X_te_s)
+proba  = knn.predict_proba(X_te_s)   # fraction of K neighbours per class</code></pre>
+
+<h2>03 — Choosing K</h2>
+<p>K controls the bias-variance trade-off:</p>
+<div class="grid">
+  <div class="card">
+    <h3>K = 1 (high variance)</h3>
+    <ul>
+      <li>Each point is its own class</li>
+      <li>Jagged decision boundary</li>
+      <li>Perfect train accuracy, poor test</li>
+      <li>Very sensitive to noise/outliers</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>K = large (high bias)</h3>
+    <ul>
+      <li>Smooth, almost linear boundary</li>
+      <li>May miss real patterns</li>
+      <li>More stable but potentially underfit</li>
+      <li>Extreme: K=n → always predicts majority class</li>
+    </ul>
+  </div>
+</div>
+<pre><code>from sklearn.model_selection import cross_val_score
+import numpy as np
+
+ks = list(range(1, 31, 2))   # odd values to avoid ties in binary classification
+cv_scores = []
+for k in ks:
+    knn = KNeighborsClassifier(n_neighbors=k, weights="distance")
+    cv  = cross_val_score(knn, X_tr_s, y_tr, cv=5, scoring="accuracy")
+    cv_scores.append(cv.mean())
+
+best_k = ks[np.argmax(cv_scores)]
+print(f"Best K = {best_k}")</code></pre>
+<div class="tip"><strong>Rule of thumb:</strong> Start with K = √n (square root of training set size). Then tune with cross-validation. Use odd K for binary classification to avoid ties.</div>
+
+<h2>04 — Uniform vs Distance Weighting</h2>
+<pre><code># Uniform: each of K neighbours gets 1 vote (majority wins)
+knn_uni = KNeighborsClassifier(n_neighbors=7, weights="uniform")
+
+# Distance: weight = 1/distance (closer = more influence)
+knn_dist = KNeighborsClassifier(n_neighbors=7, weights="distance")
+
+# When does distance weighting help?
+# If query is very close to one class-A neighbour but the
+# 6 remaining (far) neighbours are class-B:
+# Uniform → B wins (6 vs 1)
+# Distance → A might win (1 very close point outweighs 6 distant ones)</code></pre>
+
+<h2>05 — KNN Regression</h2>
+<pre><code>from sklearn.neighbors import KNeighborsRegressor
+
+knn_reg = KNeighborsRegressor(n_neighbors=5, weights="distance")
+knn_reg.fit(X_tr, y_tr)
+y_pred = knn_reg.predict(X_te)
+
+# Predicts the (weighted) MEAN of K nearest neighbours' y values
+# Small K = noisy, wiggly curve
+# Large K = smooth but potentially missing real patterns</code></pre>
+
+<h2>06 — Computational Cost</h2>
+<table>
+  <tr><th>Operation</th><th>Brute force</th><th>KD-Tree</th><th>Ball Tree</th></tr>
+  <tr><td>Build index</td><td>O(1)</td><td>O(n log n)</td><td>O(n log n)</td></tr>
+  <tr><td>Query (d small)</td><td>O(n·d)</td><td>O(log n)</td><td>O(log n)</td></tr>
+  <tr><td>Query (d large)</td><td>O(n·d)</td><td>≈O(n·d)</td><td>O(n·d) but better than KD</td></tr>
+  <tr><td>Memory</td><td>O(n·d)</td><td>O(n·d)</td><td>O(n·d)</td></tr>
+</table>
+<pre><code># sklearn automatically selects the algorithm
+knn = KNeighborsClassifier(n_neighbors=5,
+                            algorithm="auto")   # auto, ball_tree, kd_tree, brute
+# For d > 20: set algorithm="ball_tree" explicitly
+# For small n (< 30): brute force is fastest regardless</code></pre>
+
+<h2>07 — Strengths and Weaknesses</h2>
+<div class="grid">
+  <div class="card">
+    <h3>✓ Strengths</h3>
+    <ul>
+      <li>Zero training time (lazy learner)</li>
+      <li>No assumptions about data distribution</li>
+      <li>Naturally multi-class</li>
+      <li>Explainable: "these are your 5 closest cases"</li>
+      <li>Adapts to local structure</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>✗ Weaknesses</h3>
+    <ul>
+      <li>Slow prediction: O(n·d) per query</li>
+      <li>Must store all training data in memory</li>
+      <li>Breaks down in high dimensions (curse of dimensionality)</li>
+      <li>Must scale features — very sensitive to scale</li>
+      <li>No compact model representation for deployment</li>
+    </ul>
+  </div>
+</div>
+
+<h2>08 — Q&amp;A Brain Check</h2>
+<div class="qa"><div class="q">Q: Why does KNN have no "training" phase?</div>
+<div class="a">A: KNN is a "lazy learner" — it defers all computation to prediction time. When you call <code>knn.fit(X, y)</code>, sklearn simply stores (X, y). When you call <code>predict</code>, it computes distances on the fly. This contrasts with "eager learners" like Decision Trees that build a compact model during training.</div></div>
+<div class="qa"><div class="q">Q: What is the curse of dimensionality and why does it hurt KNN?</div>
+<div class="a">A: In high dimensions (d &gt; 20), all points become approximately equidistant from any query point. The concept of "nearest neighbour" loses meaning because the nearest and farthest points are almost the same distance away. KNN needs exponentially more data to maintain the same neighbourhood density as d increases.</div></div>
+<div class="qa"><div class="q">Q: Why use cross-validation to pick K instead of test set performance?</div>
+<div class="a">A: If you tune K using test-set accuracy, you've indirectly trained on the test set — your reported test accuracy will be optimistic. Cross-validation uses only the training set for selection, keeping the test set as a truly unseen final evaluation.</div></div>
+<div class="qa"><div class="q">Q: Can KNN handle categorical features?</div>
+<div class="a">A: Not directly with Euclidean distance. Options: (1) one-hot encode and use Euclidean; (2) use Hamming distance for binary features; (3) use a mixed distance like Gower distance for mixed-type data. The <code>metric</code> parameter accepts custom distance functions.</div></div>
+
+<h2>09 — What's Next</h2>
+<ul>
+  <li><strong>Module 07:</strong> Decision Trees — rule-based classification with interpretable logic</li>
+  <li><strong>knn_advanced.py:</strong> KD-tree mechanics, Ball tree, weighted KNN, curse of dimensionality experiment</li>
+</ul>
+</body>
+</html>
