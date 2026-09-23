@@ -15,10 +15,10 @@ app.innerHTML = `
   <div class="hero">
     <h1>Neural Net <span class="accent">From Scratch</span>, Live</h1>
     <p class="tagline">
-      A real 2-layer network — input &rarr; ReLU hidden layer &rarr; sigmoid output — trained by
-      actual backpropagation and gradient descent, ported line-for-line from
-      <code>module_17/backprop.py</code>. No canned animation: every frame is a real forward pass,
-      a real backward pass, and a real weight update running in your browser.
+      A 2-layer network (input, ReLU hidden layer, sigmoid output) trained by
+      backpropagation and gradient descent, ported line-for-line from
+      <code>module_17/backprop.py</code>. Every frame here is a real forward pass,
+      backward pass, and weight update running in your browser.
     </p>
   </div>
 
