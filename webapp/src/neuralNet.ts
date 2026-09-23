@@ -18,7 +18,7 @@
  *   dW1 = X^T @ dZ1 / n          db1 = mean(dZ1)
  *
  * Every matrix here is a plain number[][] (row-major) with tiny hand-rolled
- * linear algebra helpers below — no numeric library, matching the "no
+ * linear algebra helpers below, no numeric library, matching the "no
  * libraries" spirit of the from-scratch course module.
  */
 
